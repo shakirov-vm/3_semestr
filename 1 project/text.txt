@@ -1,0 +1,42 @@
+int main (size_t argc, char** argv) {
+	//argv[2] - name of file
+	int pipefd[2];
+	int error = pipe(pipefd);
+
+	pid_t pid = 0;
+	pid = fork();
+
+	if (pid == 0) { //child
+		close(pipefd[0]); //close read
+
+		char* buf = (char*) calloc (MAX_BUF, sizeof (char));
+		int readed = -1;
+		int writed = -1;
+
+		int potok = open(argv[1], O_RDONLY);
+		if (potok == -1) printf("Problem with open\n");
+
+		do {
+			readed = read(potok, buf, MAX_BUF);
+			if (readed > 0) {
+				writed = write(pipefd[1], buf, MAX_BUF);
+				printf("In child we read [%s], readed = %d\n", buf, readed);
+			}
+		} while (writed > 0 && readed > 0);
+	}
+
+	if (pid != 0) { //parent
+		close(pipefd[1]); //close write
+		
+		char* buf = (char*) calloc (MAX_BUF, sizeof (char));
+		int readed = 1;
+
+		do {
+			readed = read(pipefd[0], buf, MAX_BUF);
+			if (readed > 0) {
+				printf("In parent - [%s], readed = %d\n", buf, readed);
+			}
+		} while(readed > 0);
+	}
+	return 0;
+}Hello!
