@@ -1,4 +1,3 @@
-
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -7,7 +6,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-#define MAX_BUF 40
+#define MAX_BUF 100
 #define FIFO_TRANSMIT "./name_transmit"
 #define UNIQ_LENGTH 10
 
@@ -32,49 +31,53 @@ int main(int argc, char* argv[]) {
 	int readed, writed;
 
 	int transmit_write = open(FIFO_TRANSMIT, O_WRONLY); 
- ////////
 	
 	writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
 	if (writed != UNIQ_LENGTH) printf("We write in transmit FIFO only %d\n", writed);
 
+	int data_read = open(argv[1], O_RDONLY);
+	int uniq_write = open(FIFO_uniq, O_WRONLY);
 
-
-	int data_stream_read = open(argv[1], O_RDONLY); //!
-	int fifo_stream_write = open(FIFO_uniq, O_WRONLY); //!
-
-
-	if (data_stream_read == -1) printf("Can't open text file for read\n");
-	if (fifo_stream_write == -1) printf("Can't open fifo file for write\n");
-
-	char* buf = (char*) calloc (MAX_BUF, sizeof(char)); //!
-
+	if (data_read == -1) {
+		printf("Can't open text file for read\n");
+		return 7;
+	}
+	if (uniq_write == -1) {
+		printf("Can't open fifo file for write\n");
+		return 7;
+	}
+	char* buf = (char*) calloc (MAX_BUF, sizeof(char));
+	if (buf == NULL) {
+		printf("Can't allocate memory for buf");
+		return 6;
+	}
 
 	while(1) {
-		readed = 0; //!
-		writed = 0;
-		
-		readed = read(data_stream_read, buf, MAX_BUF); 
+
+		readed = read(data_read, buf, MAX_BUF); 
 	
 		if (readed != MAX_BUF) {
 			
-			readed = read(data_stream_read, buf, MAX_BUF); 
+			readed = read(data_read, buf, MAX_BUF); 
 			if (readed != 0) {	
-				printf("We can't read file, %d readed\n", readed);		
-				close(data_stream_read); // We always can close correct?
-				close(fifo_stream_write);
+				printf("We can't read file, %d readed\n", readed);	
+				free(buf);	
+				close(data_read); 
+				close(uniq_write);
 		
 				return 4;
 			}
 		}
 	
-		writed = write(fifo_stream_write, buf, readed); 
-		//printf("Write %d byte\n", writed);
+		writed = write(uniq_write, buf, readed); 
+
 		printf("%s", buf);
 
 		if (writed != readed) {
 			printf("We can't write correctly, %d writed\n", writed);
-			close(data_stream_read); // We always can close correct?
-			close(fifo_stream_write);
+			free(buf);
+			close(data_read); 
+			close(uniq_write);
 		
 			return 5;
 		}
@@ -83,8 +86,8 @@ int main(int argc, char* argv[]) {
 			break;
 	}
 
-	close(data_stream_read); // We always can close correct?
-	close(fifo_stream_write);
+	close(data_read);
+	close(uniq_write);
 
 	printf("Exit from writer\n");
 
