@@ -6,90 +6,71 @@
 #include <stdio.h>
 #include <errno.h>
 
-#define MAX_BUF 100
+#define MAX_BUF 10
 #define FIFO_TRANSMIT "./name_transmit"
 #define UNIQ_LENGTH 10
 
 int main() {
 
-	int readed, writed, err;
-	char* buf = (char*) calloc (MAX_BUF, sizeof(char));
-	if (buf == NULL) {
-		printf("Can't allocate memory for buf");
-		return 6;
-	}
-
-
+	//char FIFO_uniq[UNIQ_LENGTH];
 	char FIFO_uniq[UNIQ_LENGTH] = "uniqXXXXXX";
-	
-	err = mkstemp(FIFO_uniq);
-	if (err == -1) {
-		printf("Can't create uniq name of file\n");
-		return 8;
-	}
+	char* buf = (char*) calloc (MAX_BUF, sizeof(char)); 
+	int readed, err;
 
-	err = remove(FIFO_uniq);
+  	mkstemp(FIFO_uniq);
+	remove(FIFO_uniq);
+// 1
+	err = mkfifo(FIFO_TRANSMIT, 0666);
 	if (err == -1) {
-		printf("Can't remove uniq name of file\n");
-		return 8;
-	}
-
-	err = mkfifo(FIFO_TRANSMIT, 0666); // MAKE TRANSMIT FIFO
-	if (errno == EEXIST) printf("FIFO_TRANSMIT almost exist\n");
-	
+		perror("mk transmit fifo ");
+	} 
 	int transmit_write = open(FIFO_TRANSMIT, O_WRONLY);
 	if (transmit_write == -1) {
-		printf("Can't open transmit_fifo file for write\n");
-		return 7;
+		perror("transmit open for write ");
 	}
 
-	writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
-	if (writed != UNIQ_LENGTH) printf("We write in transmit FIFO only %d\n", writed);
-
-	close(transmit_write);
-
-
-	
+//exit(11);
+// 2
+	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
+	if (writed == -1) {
+		perror("write in transmit ");
+	}
+exit(100);
 	err = mkfifo(FIFO_uniq, 0666);
-	if (errno == EEXIST) printf("FIFO_uniq [%s] almost exist\n", FIFO_uniq);
-
-	int uniq_read = open(FIFO_uniq, O_RDONLY);// | O_NONBLOCK);
+	if (err == -1) {
+		perror("mk uniq fifo ");
+	}
+// 3
+	int uniq_read = open(FIFO_uniq, O_RDONLY | O_NONBLOCK);
 	if (uniq_read == -1) {
-		printf("Can't open fifo file for read\n");
-		return 7;
+		perror("uniq open for read ");
+	}
+	printf("We open uniq fifo for read - %d\n", uniq_read);
+	//поменяьб нонблок
+
+	int val = fcntl(uniq_read, F_SETFL, O_RDONLY);
+	if (val == -1) {
+		printf("Fcntl is bad\n");
+		perror("fcntl failed ");
 	}
 
-	int val = fcntl(uniq_read, F_GETFL, 0);
-	printf("First val - %d\n", val);
-	int flags = O_NONBLOCK;
-	val &= ~flags;
-	fcntl(uniq_read, F_SETFL, val);
-	val = fcntl(uniq_read, F_GETFL, 0);
-	printf("Secon val - %d\n", val);
-	
-//Тут уже не должно быть нонблока
+//exit(10);
 	while(1) {
-		
+//sleep(20);
 		readed = read(uniq_read, buf, MAX_BUF);
-printf("READED - %d\n", readed);
+		if (readed == -1) {
+			perror("read from uniq ");
+		}
+printf("We read %d\n", readed);
 		if (readed == 0) break;
 
-		printf("%s", buf);
+		printf("%s\n", buf);
 
 		if (readed != MAX_BUF) {
 			readed = read(uniq_read, buf, MAX_BUF);
-			if (readed == 0) {			
-				printf("We can't read file, %d readed\n", readed);
-				close(uniq_read);
-
-				return 4;
-			}
+			if (readed == 0) return 4;
 		}
 	}
-
-	close(uniq_read);
-
-	printf("\nExit from reader\n");
 
 	return 0;
 }

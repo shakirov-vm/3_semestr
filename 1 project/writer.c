@@ -12,87 +12,79 @@
 
 int main(int argc, char* argv[]) {
 
-	int readed, writed, err;
+	//char FIFO_uniq[UNIQ_LENGTH] = "uniqXXXXXX";
+	int err = 0;
+	char FIFO_uniq[UNIQ_LENGTH];
 	char* buf = (char*) calloc (MAX_BUF, sizeof(char));
 	if (buf == NULL) {
-		printf("Can't allocate memory for buf");
-		return 6;
+		perror("Buf alloc ");
 	}
-	
+	int writed;
 
-	char FIFO_uniq[UNIQ_LENGTH];
-
-	err = mkfifo(FIFO_TRANSMIT, 0666); // MAKE TRANSMIT FIFO
-	if (errno == EEXIST) printf("FIFO_TRANSMIT almost exist\n");
-
+	err = mkfifo(FIFO_TRANSMIT, 0666);
+	if (err == -1) {
+		perror("mk transmit fifo ");
+	}
+// 1
   	int transmit_read = open(FIFO_TRANSMIT, O_RDONLY);
-	if (transmit_read == -1) {
-		printf("Can't open transmit_fifo file for read\n");
-		return 7;
+  	if (transmit_read == -1) {
+  		perror("open transmit for read ");
+  	}
+
+	mkfifo(FIFO_uniq, 0666);
+	if (err == -1) {
+		perror("mk transmit fifo ");
 	}
-
-  	readed = read(transmit_read, FIFO_uniq, UNIQ_LENGTH);
-  	if (readed != UNIQ_LENGTH) {
-  		printf("We read from transmit FIFO only %d\n", readed);
-  		return 9;
-	}
-  	close(transmit_read);
-
-
-	err = mkfifo(FIFO_uniq, 0666);
-	if (errno == EEXIST) printf("FIFO_uniq [%s] almost exist\n", FIFO_uniq);
-printf("BEFORE OPEN\n");
+//exit(100);
 	int data_read = open(argv[1], O_RDONLY);
-	int uniq_write = open(FIFO_uniq, O_WRONLY);
-printf("AFTER OPEN\n");
 	if (data_read == -1) {
-		printf("Can't open text file for read\n");
-		return 7;
+		perror("open data for read ");
 	}
+// 2
+	int readed = read(transmit_read, FIFO_uniq, UNIQ_LENGTH);
+  	if (readed != UNIQ_LENGTH) {
+  		if (readed == -1) perror("read from transmit");
+  		printf("We read from TRANSMIT %d\n", readed);
+  		return 15;
+  	}
+  	//exit(100);
+// 3
+//sleep(10);
+	err = mkfifo(FIFO_uniq, 0666);
+	if (err == -1) {
+		perror("mk uniq fifo ");
+	}
+
+	int uniq_write = open(FIFO_uniq, O_WRONLY);
 	if (uniq_write == -1) {
-		printf("Can't open fifo file for write\n");
-		return 7;
+		printf("Uniq is [%s]\n", FIFO_uniq);
+		perror("open uniq for write ");
 	}
 
 	while(1) {
 
 		readed = read(data_read, buf, MAX_BUF); 
-	
-		if (readed != MAX_BUF) {
-			
+		if (readed == -1) {
+			perror("read from data ");
+		}
+
+		if (readed != MAX_BUF) {	
 			readed = read(data_read, buf, MAX_BUF); 
-			if (readed != 0) {	
-				printf("We can't read file, %d readed\n", readed);	
-				free(buf);	
-				close(data_read); 
-				close(uniq_write);
-		
-				return 4;
-			}
+			if (readed != 0) return 4;
 		}
 
 		writed = write(uniq_write, buf, readed); 
-printf("WRITED - %d\n", writed);
-
-		printf("%s", buf);
+		if (writed == -1) {
+			perror("write in uniq ");
+		}
+		printf("%s\n", buf);
 
 		if (writed != readed) {
-			printf("We can't write correctly, %d writed\n", writed);
-			free(buf);
-			close(data_read); 
-			close(uniq_write);
-		
+			printf("readed - %d, writed - %d\n", readed, writed);
 			return 5;
-		}
-		
-		if (readed == 0)
-			break;
+		}	
+		if (readed == 0) break;
 	}
-
-	close(data_read);
-	close(uniq_write);
-
-	printf("Exit from writer\n");
 
 	return 0;
 }
