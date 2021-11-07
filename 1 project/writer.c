@@ -12,32 +12,39 @@
 
 int main(int argc, char* argv[]) {
 
-	int err = 0;
-
-	char FIFO_uniq[UNIQ_LENGTH] = "uniqXXXXXX";
+	int readed, writed, err;
+	char* buf = (char*) calloc (MAX_BUF, sizeof(char));
+	if (buf == NULL) {
+		printf("Can't allocate memory for buf");
+		return 6;
+	}
 	
-	err = mkstemp(FIFO_uniq);
-	if (err == -1) printf("Can't create uniq name of file\n");
 
-	err = remove(FIFO_uniq);
-	if (err == -1) printf("Can't remove uniq name of file\n");
+	char FIFO_uniq[UNIQ_LENGTH];
 
 	err = mkfifo(FIFO_TRANSMIT, 0666); // MAKE TRANSMIT FIFO
 	if (errno == EEXIST) printf("FIFO_TRANSMIT almost exist\n");
 
+  	int transmit_read = open(FIFO_TRANSMIT, O_RDONLY);
+	if (transmit_read == -1) {
+		printf("Can't open transmit_fifo file for read\n");
+		return 7;
+	}
+
+  	readed = read(transmit_read, FIFO_uniq, UNIQ_LENGTH);
+  	if (readed != UNIQ_LENGTH) {
+  		printf("We read from transmit FIFO only %d\n", readed);
+  		return 9;
+	}
+  	close(transmit_read);
+
+
 	err = mkfifo(FIFO_uniq, 0666);
 	if (errno == EEXIST) printf("FIFO_uniq [%s] almost exist\n", FIFO_uniq);
-	
-	int readed, writed;
-
-	int transmit_write = open(FIFO_TRANSMIT, O_WRONLY); 
-	
-	writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
-	if (writed != UNIQ_LENGTH) printf("We write in transmit FIFO only %d\n", writed);
-
+printf("BEFORE OPEN\n");
 	int data_read = open(argv[1], O_RDONLY);
 	int uniq_write = open(FIFO_uniq, O_WRONLY);
-
+printf("AFTER OPEN\n");
 	if (data_read == -1) {
 		printf("Can't open text file for read\n");
 		return 7;
@@ -45,11 +52,6 @@ int main(int argc, char* argv[]) {
 	if (uniq_write == -1) {
 		printf("Can't open fifo file for write\n");
 		return 7;
-	}
-	char* buf = (char*) calloc (MAX_BUF, sizeof(char));
-	if (buf == NULL) {
-		printf("Can't allocate memory for buf");
-		return 6;
 	}
 
 	while(1) {
@@ -68,8 +70,9 @@ int main(int argc, char* argv[]) {
 				return 4;
 			}
 		}
-	
+
 		writed = write(uniq_write, buf, readed); 
+printf("WRITED - %d\n", writed);
 
 		printf("%s", buf);
 

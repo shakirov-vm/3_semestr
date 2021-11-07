@@ -6,9 +6,11 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
+int func(size_t biggest);
+
 struct msgbuf {
 	long mtype;
-	int* num_id;
+	int  process_id;
 };
 
 int argv_handle (char* char_num);
@@ -36,26 +38,36 @@ int main(size_t argc, char** argv) {
 	printf("Your number less then zero or not number\n");
 	return 1;
 	}
+////////////////////////////////////////////////////////
+	printf("You enter %ld\n", biggest);
 
+	return func(biggest);	
+	//system("pause");
+}
+
+int func(size_t biggest) {
 	pid_t pid = 1;
-
-	int id_msg = msgget(IPC_PRIVATE, 0666 || IPC_CREAT);
+	int id_msg = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
+	if (id_msg == -1) {
+		printf("OH NO, id_msg is -1\n");
+		return 7;
+	}
+	printf("ID_MSG - %d\n", id_msg);
 
 	struct msgbuf buffer;
-
-	buffer.num_id = (int*) calloc (1, sizeof (int));
+	int err = 0;
 
 	size_t i;
-
-	for(i = 0; i < biggest; i++) {
+					///////////
+	for (i = 1; i < biggest + 1; i++) {
 		if (pid > 0) {
+			printf("fork %ld\n", i);
 			pid = fork();
 		}
 
 		if (pid == 0) {
-			buffer.mtype = i;
-			msgsnd(id_msg, &buffer, sizeof(int), NULL);
-			//printf("Child %ld, pid - %d, ppid - %d\n", i, getpid(), getppid());
+			buffer.mtype = i + 1;
+			buffer.process_id = i + 1;
 			break;
 		}
 
@@ -65,33 +77,45 @@ int main(size_t argc, char** argv) {
 		}
 	}
 
-	int tmp = i;
-	const int process_place = i;
-	ssize_t errore;
+	if (pid > 0) {
 
-	if (pid == 0) {
-		//tmp += 100;
-		for (tmp; tmp > 0; tmp--) { //Critical section?
-			printf("We recieve messaage in %d\n", process_place);														//   ????
-			errore = msgrcv(id_msg, &buffer, sizeof(int), process_place, NULL);
-			if (errore == -1) printf("Err in %d\n", process_place); 
-
-		}
-
-		//BAD
-		errore = msgrcv(id_msg, &buffer, sizeof(int), process_place, NULL);
-		printf("CHILD: %d \n", process_place);
-
-
-		errore = msgrcv(id_msg, &buffer, sizeof(int), process_place, NULL);
-
-		for (i + 1; i < biggest; i++) {
-			buffer.mtype = i;
-			msgsnd(id_msg, &buffer, sizeof(int), NULL);
+		buffer.mtype = 1; //Родительский процесс отправляет тип первого процесса
+		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
+		//exit(10);
+		if (err == -1) {
+			perror("First msgsnd() ");
+			printf("We don't send first message\n");
 		}
 	}
 
+	const int process_place = i;
+	struct msgbuf answer;
 
+	if (pid == 0) {
+
+		printf("Process_place - %d\n", process_place);
+		err = msgrcv(id_msg, &answer, sizeof(int), process_place, 0);
+		if (err == -1) {
+			perror("msgrcv() ");
+			printf("We don't recieve in %d\n", process_place);
+		}
+		if (errno == EAGAIN) printf("Oh no! EGAGIN\n");
+//if (process_place == 3) exit(12);
+		printf("%ld\n", answer.mtype);
+		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
+		if (err == -1) {
+			printf("msgsnd() ");
+			printf("We don't send %d message\n", process_place); 
+		}
+
+		//unlink
+	}
+
+	/*err = msgctl(id_msg, IPC_RMID, NULL);
+	if (err == -1) {
+		perror("msgctl() ");	
+		printf("Can't RM!\n\n");
+	}*/
 
 	return 0;
 }

@@ -12,3 +12,5 @@ run_wr_2:
 	./writer two
 run_wr_3:
 	./writer three
+run_wr_easy:
+	./writer easy
