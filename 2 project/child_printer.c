@@ -49,10 +49,9 @@ int func(size_t biggest) {
 	pid_t pid = 1;
 	int id_msg = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
 	if (id_msg == -1) {
-		printf("OH NO, id_msg is -1\n");
+		perror("id_msg is -1\n");
 		return 7;
 	}
-	printf("ID_MSG - %d\n", id_msg);
 
 	struct msgbuf buffer;
 	int err = 0;
@@ -61,7 +60,6 @@ int func(size_t biggest) {
 					///////////
 	for (i = 1; i < biggest + 1; i++) {
 		if (pid > 0) {
-			printf("fork %ld\n", i);
 			pid = fork();
 		}
 
@@ -72,7 +70,7 @@ int func(size_t biggest) {
 		}
 
 		if (pid <= 0) {
-			printf("Error with fork\n");
+			perror("Error with fork\n");
 			return 5;
 		}
 	}
@@ -83,9 +81,24 @@ int func(size_t biggest) {
 		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
 		//exit(10);
 		if (err == -1) {
-			perror("First msgsnd() ");
-			printf("We don't send first message\n");
+			perror("We don't send first message\n");
+			return 9;
 		}
+		for (int j = biggest; j < biggest * 2; j++) {
+//printf("We go to take at parent %d\n", j + 1);
+			err = msgrcv(id_msg, &buffer, sizeof(int), j + 1, 0);
+//printf("We take at parent %d\n", j + 1);
+			if (err == -1) {
+				perror("msgrcv() ");
+				printf("We don't recieve in %d\n", j + 1);
+			}
+		}
+		err = msgctl(id_msg, IPC_RMID, NULL);
+		if (err == -1) {
+			perror("msgctl() ");	
+			return 8;
+		}
+		printf("Rm msg\n");
 	}
 
 	const int process_place = i;
@@ -93,29 +106,32 @@ int func(size_t biggest) {
 
 	if (pid == 0) {
 
-		printf("Process_place - %d\n", process_place);
+		//printf("Process_place - %d\n", process_place);
 		err = msgrcv(id_msg, &answer, sizeof(int), process_place, 0);
 		if (err == -1) {
-			perror("msgrcv() ");
+			perror("msgrcv ");
 			printf("We don't recieve in %d\n", process_place);
 		}
-		if (errno == EAGAIN) printf("Oh no! EGAGIN\n");
 //if (process_place == 3) exit(12);
+
 		printf("%ld\n", answer.mtype);
+
 		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
 		if (err == -1) {
-			printf("msgsnd() ");
+			perror("msgsnd ");
 			printf("We don't send %d message\n", process_place); 
 		}
 
-		//unlink
+		buffer.mtype = biggest + i + 1;
+		buffer.process_id = biggest + i + 1;
+//printf("We go to send on child %d\n", process_place);
+		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
+//printf("We send from child %d\n", process_place);
+		if (err == -1) {
+			perror("msgsnd ");
+			printf("We don't send %d message\n", process_place); 
+		}
 	}
-
-	/*err = msgctl(id_msg, IPC_RMID, NULL);
-	if (err == -1) {
-		perror("msgctl() ");	
-		printf("Can't RM!\n\n");
-	}*/
 
 	return 0;
 }
