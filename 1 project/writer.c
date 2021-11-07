@@ -55,10 +55,16 @@ int main(int argc, char* argv[]) {
 		perror("mk uniq fifo ");
 	}
 
-	int uniq_write = open(FIFO_uniq, O_WRONLY);
+	int uniq_write = open(FIFO_uniq, O_WRONLY);// | O_NONBLOCK);
 	if (uniq_write == -1) {
 		printf("Uniq is [%s]\n", FIFO_uniq);
 		perror("open uniq for write ");
+	}
+
+	int val = fcntl(uniq_write, F_SETFL, O_WRONLY);
+	if (val == -1) {
+		printf("Fcntl is bad\n");
+		perror("fcntl failed ");
 	}
 
 	while(1) {

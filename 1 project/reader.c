@@ -35,7 +35,7 @@ int main() {
 	if (writed == -1) {
 		perror("write in transmit ");
 	}
-exit(100);
+//exit(100);
 	err = mkfifo(FIFO_uniq, 0666);
 	if (err == -1) {
 		perror("mk uniq fifo ");
