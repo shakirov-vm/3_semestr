@@ -56,7 +56,7 @@ printf("Do MSG\n");
 	int err = 0;
 
 	long i;
-					///////////
+					
 	for (i = 1; i < biggest + 1; i++) {
 		if (pid > 0) {
 			pid = fork();
@@ -64,8 +64,6 @@ if (pid > 0) printf("%ld fork\n", i);
 		}
 
 		if (pid == 0) {
-			//buffer.mtype = i + 1;
-printf("mtype is %ld\n", i);
 			break;
 		}
 
@@ -74,7 +72,7 @@ printf("mtype is %ld\n", i);
 			return 5;
 		}
 	}
-printf("i is %ld\n", i);
+
 	if (pid > 0) {
 
 		buffer.mtype = 1; //Родительский процесс отправляет тип первого процесса
@@ -84,7 +82,6 @@ printf("i is %ld\n", i);
 			perror("We don't send first message\n");
 			return 9;
 		}
-printf("First send %ld and i is %ld\n", buffer.mtype, i);
 		for (int j = biggest; j < biggest * 2; j++) {
 
 			err = msgrcv(id_msg, &buffer, sizeof(int), j + 1, 0);
@@ -93,7 +90,6 @@ printf("First send %ld and i is %ld\n", buffer.mtype, i);
 				perror("msgrcv() ");
 				printf("We don't recieve in %d\n", j + 1);
 			}
-printf("in parent recieve %ld\n", j + 1 - biggest);
 		}
 		err = msgctl(id_msg, IPC_RMID, NULL);
 		if (err == -1) {
@@ -103,45 +99,36 @@ printf("in parent recieve %ld\n", j + 1 - biggest);
 		printf("Rm msg\n");
 	}
 
-	//const int process_place = i;
-printf("i is %d and i is %ld\n", i, i);
 	struct msgbuf answer;
 
 	if (pid == 0) {
+
 		long tmp = i;
-printf("BEFORE RECIEVE I IS %ld\n", i);
 		err = msgrcv(id_msg, &answer, sizeof(int), i, 0);
-printf("AFTER RECIEVE I IS %ld\n", i);
-		i = tmp;
-printf("AFTER EQUAL I IS %ld\n", i);		
+		i = tmp; //Потому что в первом  ребёнке i портится 
+	
 		if (err == -1) {
 			perror("msgrcv ");
-			printf("We don't recieve in %d\n", i);
+			printf("We don't recieve in %ld\n", i);
 		}
-printf("in child recieve %d\n", i);
 
 		printf("%ld\n", answer.mtype);
 
-		printf("before BUFFER.MTYPE is %d\n", buffer.mtype);
 		buffer.mtype = i + 1;
-		printf("after BUFFER.MTYPE is %d\n", buffer.mtype);
-
-printf("BEFORE SEND I IS %ld\n", i);
 		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
+
 		if (err == -1) {
 			perror("msgsnd ");
-			printf("We don't send %d message\n", i); 
+			printf("We don't send %ld message\n", i); 
 		}
-printf("in child send %ld\n", i + 1);
+
 		buffer.mtype = biggest + i + 1;
-
 		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
 
 		if (err == -1) {
 			perror("msgsnd ");
-			printf("We don't send %d message\n", i); 
+			printf("We don't send %ld message\n", i); 
 		}
-printf("in child send %ld for parent, buffer.mtype - %ld, biggest - %ld, i - %d\n", buffer.mtype - biggest, buffer.mtype, biggest, i);
 	}
 
 	return 0;
