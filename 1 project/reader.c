@@ -12,59 +12,68 @@
 
 int main() {
 
-	//char FIFO_uniq[UNIQ_LENGTH];
 	char FIFO_uniq[UNIQ_LENGTH] = "uniqXXXXXX";
 	char* buf = (char*) calloc (MAX_BUF, sizeof(char)); 
 	int readed, err;
 
   	mkstemp(FIFO_uniq);
 	remove(FIFO_uniq);
-// 1
+
 	err = mkfifo(FIFO_TRANSMIT, 0666);
-	if (err == -1) {
+	if (err == -1 && errno != EEXIST) {
 		perror("mk transmit fifo ");
+		return 2;
 	} 
+
 	int transmit_write = open(FIFO_TRANSMIT, O_WRONLY);
 	if (transmit_write == -1) {
 		perror("transmit open for write ");
+		return 3;
 	}
 
-//exit(11);
-// 2
-	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
-	if (writed == -1) {
-		perror("write in transmit ");
-	}
-//exit(100);
 	err = mkfifo(FIFO_uniq, 0666);
-	if (err == -1) {
+	if (err == -1 && errno != EEXIST) {
 		perror("mk uniq fifo ");
+		return 2;
 	}
-// 3
+
 	int uniq_read = open(FIFO_uniq, O_RDONLY | O_NONBLOCK);
 	if (uniq_read == -1) {
 		perror("uniq open for read ");
+		return 3;
 	}
-	printf("We open uniq fifo for read - %d\n", uniq_read);
-	//поменяьб нонблок
 
 	int val = fcntl(uniq_read, F_SETFL, O_RDONLY);
 	if (val == -1) {
 		printf("Fcntl is bad\n");
 		perror("fcntl failed ");
+		return 5;
 	}
 
-//exit(10);
+	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
+	if (writed == -1) {
+		perror("write in transmit ");
+		return 4;
+	}
+
+	if (writed != UNIQ_LENGTH) {
+		printf("We writed in transmit only %d\n", writed);
+		return 4;
+	}
+
+	sleep(3);
+
 	while(1) {
-//sleep(20);
+
 		readed = read(uniq_read, buf, MAX_BUF);
 		if (readed == -1) {
 			perror("read from uniq ");
+			return 4;
 		}
-printf("We read %d\n", readed);
+
 		if (readed == 0) break;
 
-		printf("%s\n", buf);
+		printf("%s", buf);
 
 		if (readed != MAX_BUF) {
 			readed = read(uniq_read, buf, MAX_BUF);
