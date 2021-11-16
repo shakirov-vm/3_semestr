@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-#define MAX_BUF 10
+#define MAX_BUF 2000
 #define FIFO_TRANSMIT "./name_transmit"
 #define UNIQ_LENGTH 10
 
@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
   		printf("We read from TRANSMIT %d\n", readed);
   		return 4;
   	}
-  	
+
   	printf("Get uniq fifo name - [%s]\n", FIFO_uniq);
 
 	err = mkfifo(FIFO_uniq, 0666);
@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
 		perror("mk uniq fifo ");
 		return 2;
 	}
-
+//sleep(3);
 	int uniq_write = open(FIFO_uniq, O_WRONLY);
 	if (uniq_write == -1) {
 		printf("Uniq is [%s]\n", FIFO_uniq);
@@ -63,24 +63,12 @@ int main(int argc, char* argv[]) {
 
 	printf("Processes connect\n");
 
-	int val = fcntl(uniq_write, F_SETFL, O_WRONLY);
-	if (val == -1) {
-		printf("Fcntl is bad\n");
-		perror("fcntl failed ");
-		return 5;
-	}
-
 	while(1) {
 
 		readed = read(data_read, buf, MAX_BUF); 
 		if (readed == -1) {
 			perror("read from data ");
 			return 4;
-		}
-
-		if (readed != MAX_BUF) {	
-			readed = read(data_read, buf, MAX_BUF); 
-			if (readed != 0) return 4;
 		}
 
 		writed = write(uniq_write, buf, readed); 
@@ -97,6 +85,7 @@ int main(int argc, char* argv[]) {
 		}	
 		if (readed == 0) break;
 	}
-
+	printf("\n");
+	printf("Write end\n");
 	return 0;
 }

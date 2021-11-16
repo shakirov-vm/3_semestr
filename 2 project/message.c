@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <sys/wait.h>
 
 int func(size_t biggest);
 
@@ -60,7 +61,6 @@ printf("Do MSG\n");
 	for (i = 1; i < biggest + 1; i++) {
 		if (pid > 0) {
 			pid = fork();
-if (pid > 0) printf("%ld fork\n", i);
 		}
 
 		if (pid == 0) {
@@ -82,6 +82,18 @@ if (pid > 0) printf("%ld fork\n", i);
 			perror("We don't send first message\n");
 			return 9;
 		}
+
+		pid_t pid;
+		int status;
+		for (int k = 0; k < biggest; k++) {
+			pid = waitpid(-1, &status, 0);
+			if (WIFEXITED(status)) printf("process %d is succes, status is %d\n", pid, status);
+			if (!WIFEXITED(status) || status != 0) {
+				printf("ALARM!\n");
+				//kill(-1, SIGTERM);
+			}
+		}
+
 		for (int j = biggest; j < biggest * 2; j++) {
 
 			err = msgrcv(id_msg, &buffer, sizeof(int), j + 1, 0);
@@ -113,7 +125,7 @@ if (pid > 0) printf("%ld fork\n", i);
 		}
 
 		printf("%ld\n", answer.mtype);
-
+if(i == 5) exit(15);
 		buffer.mtype = i + 1;
 		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
 

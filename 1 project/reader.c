@@ -2,11 +2,13 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <sys/stat.h>
+#include <sys/select.h>
 #include <stdio.h>
 #include <errno.h>
 
-#define MAX_BUF 10
+#define MAX_BUF 2000
 #define FIFO_TRANSMIT "./name_transmit"
 #define UNIQ_LENGTH 10
 
@@ -37,11 +39,20 @@ int main() {
 		return 2;
 	}
 
+//int dataFifo = OpenFifo (dataFifoName, O_RDONLY | O_NONBLOCK);
 	int uniq_read = open(FIFO_uniq, O_RDONLY | O_NONBLOCK);
 	if (uniq_read == -1) {
 		perror("uniq open for read ");
 		return 3;
 	}
+
+
+	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
+	if (writed == -1) {
+		perror("write in transmit ");
+		return 4;
+	}
+	
 
 	int val = fcntl(uniq_read, F_SETFL, O_RDONLY);
 	if (val == -1) {
@@ -50,21 +61,17 @@ int main() {
 		return 5;
 	}
 
-	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
-	if (writed == -1) {
-		perror("write in transmit ");
-		return 4;
-	}
-
 	if (writed != UNIQ_LENGTH) {
 		printf("We writed in transmit only %d\n", writed);
 		return 4;
 	}
-
+	printf("We ready for read\n");
+//exit(100);
+	printf("Wait 3 seconds\n");
 	sleep(3);
 
 	while(1) {
-
+		printf("We want block\n");
 		readed = read(uniq_read, buf, MAX_BUF);
 		if (readed == -1) {
 			perror("read from uniq ");
@@ -75,11 +82,9 @@ int main() {
 
 		printf("%s", buf);
 
-		if (readed != MAX_BUF) {
-			readed = read(uniq_read, buf, MAX_BUF);
-			if (readed == 0) return 4;
-		}
+		if (readed != MAX_BUF) continue;
 	}
-
+	printf("\n");
+	printf("Reader end\n");
 	return 0;
 }
