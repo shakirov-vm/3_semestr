@@ -43,7 +43,19 @@ int main(size_t argc, char** argv) {
 	return printer(biggest);
 }
 
+
 int printer(size_t biggest) {
+
+struct msgbuf answer;
+long tmp;
+
+printf("%p %p\n", &answer, &tmp);
+//&answer;
+//&tmp;
+
+struct msgbuf buffer;
+long i;
+
 	pid_t pid = 1;
 	int id_msg = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
 	if (id_msg == -1) {
@@ -51,11 +63,16 @@ int printer(size_t biggest) {
 		return 2;
 	}
 
-	struct msgbuf buffer;
 	buffer.mtype = -1;
 	int err = 0;
 
-	long i;
+	buffer.mtype = 1; //Родительский процесс отправляет тип первого процесса
+	err = msgsnd(id_msg, &buffer, sizeof(int), 0);
+
+	if (err == -1) {
+		perror("We don't send first message\n");
+		return 4;
+	}
 		
 	pid_t* pids = (pid_t*) calloc (biggest, sizeof(pid_t));			
 	for (i = 1; i < biggest + 1; i++) {
@@ -75,16 +92,8 @@ int printer(size_t biggest) {
 	}
 
 	if (pid > 0) {
-
+//exit(10);
 		//for(int t = 0; t < biggest; t++) printf("%d ", pids[t]);
-
-		buffer.mtype = 1; //Родительский процесс отправляет тип первого процесса
-		err = msgsnd(id_msg, &buffer, sizeof(int), 0);
-
-		if (err == -1) {
-			perror("We don't send first message\n");
-			return 4;
-		}
 
 		pid_t pid_p;
 		int status;
@@ -117,13 +126,17 @@ int printer(size_t biggest) {
 		printf("Rm msg\n");
 	}
 
-	struct msgbuf answer;
 
 	if (pid == 0) {
+		//tmp = i;
+		//printf("govno :l %li\n", i);
 
-		long tmp = i;
+		//                           ТУТ ДОЛЖЕН 0
 		err = msgrcv(id_msg, &answer, sizeof(int), i, 0);
-		i = tmp; //Потому что в первом  ребёнке i портится 
+		
+		//printf("after :l %li\n", i);
+		//i = tmp; //Потому что в первом  ребёнке i портится 
+
 	
 		if (err == -1) {
 			perror("msgrcv ");
@@ -131,7 +144,7 @@ int printer(size_t biggest) {
 			return 4;
 		}
 
-		printf("%ld\n", answer.mtype);
+		printf("bolee govno :%ld\n", i);
 //if(i == 5) exit(15);
 		buffer.mtype = i + 1;
 		err = msgsnd(id_msg, &buffer, sizeof(int), 0);

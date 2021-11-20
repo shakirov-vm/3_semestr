@@ -71,7 +71,7 @@ int main() {
 	sleep(3);
 
 	while(1) {
-		printf("We want block\n");
+
 		readed = read(uniq_read, buf, MAX_BUF);
 		if (readed == -1) {
 			perror("read from uniq ");
