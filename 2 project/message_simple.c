@@ -111,7 +111,7 @@ int printer(size_t biggest) {
 			printf("We don't recieve in %ld\n", process_num);
 		}
 
-		printf("%ld\n", answer.mtype);
+		printf("%ld\n", process_num);
 
 		buffer.mtype = process_num + 1;
 

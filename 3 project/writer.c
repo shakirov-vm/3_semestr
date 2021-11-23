@@ -1,19 +1,55 @@
 #include <errno.h>
-#include <sys/types.h>
+#include <sys/sem.h>
 #include <sys/ipc.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 #define SHM_SIZE 256
 #define SHM_NAME "shm_general"
 #define PROJ_ID 0xDEADBEAF
 #define DATA_NAME argv[2]
+#define NUM_SEMAPHORES 6
+/*
+#define ONE_WRITER sem_id[0]
+#define ONE_READER sem_id[1]
+#define WRITER_CONNECT sem_id[2]
+#define READER_CONNECT sem_id[3]
+#define EMPTY sem_id[4]
+#define FULL sem_id[5]
+*/
+enum {
 
-void init_semaphore(int sem_id, int semnum, int initval) {
+	ONE_WRITER = 0,
+	ONE_READER = 1,
+	WRITER_CONNECT = 2,
+	READER_CONNECT = 3,
+	EMPTY = 4,
+	FULL = 5
+};
+
+union semun {
+	int val; 				
+	struct semid_ds* buf; 	
+	unsigned short* array; 
+};
+
+int init_semaphore(int sem_id, int semnum, int initval) {
 	union semun semopts;
 	semopts.val = initval;
-	semctl(sem_id, semnum, SETVAL, semopts);
+	return semctl(sem_id, semnum, SETVAL, semopts);
 }
 
 int main(int argc, char** argv) {
+	if (argc != 2) {
+		printf("Invalid args quantity\n");
+		return 1;
+	}
 
 	int err = 0;
 
@@ -23,45 +59,73 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	int shm_id = shmget(key, SHM_SIZE, IPC_CREAT);
+	int shm_id = shmget(key, SHM_SIZE, IPC_CREAT | 0666);
 	if (shm_id == -1) {
 		perror("shmget ");
 		return 2;
 	}
 
-	int sem_id = semget(key, 3, IPC_CREAT);
+	int sem_id = semget(key, NUM_SEMAPHORES, IPC_CREAT | 0666);
 	if (sem_id == -1) {
 		perror("semget ");
 		return 3;
 	}
 
-	init_semaphore(sem_id, 0, 1);
-	init_semaphore(sem_id, 1, 0);
-	init_semaphore(sem_id, 2, 1);
+	struct sembuf one_writer_go_in[2];
 
-// 0 отсекает все кроме одного writers, 1 readers, 2 даёт доступ к памяти либо ридеру либо врайтеру
+	//one_writer_go_in[0] = {ONE_WRITER, 0, 0};
+	one_writer_go_in[0].sem_num = ONE_WRITER;
+	one_writer_go_in[0].sem_op = 0;
+	one_writer_go_in[0].sem_flg = 0;
+	//one_writer_go_in[1] = {ONE_WRITER, 1, SEM_UNDO};
+	one_writer_go_in[1].sem_num = ONE_WRITER;
+	one_writer_go_in[1].sem_op = 1;
+	one_writer_go_in[1].sem_flg = SEM_UNDO;
 
-	struct sembuf only_one_remain_writer;
-	struct sembuf only_one_remain_reader; 
-	struct sembuf shm_memory;
-
-	only_one_remain_writer.sem_num = 0;
-	only_one_remain_writer.sem_op = -1;
-	only_one_remain_writer.sem_flg = SEM_UNDO;
-
-	shm_memory.sem_num = 2;
-	shm_memory.sem_op = -1;
-	shm_memory.sem_flg = 0;
-
-	err = semop(sem_id, &only_one_remain_writer, 1);
+	err = semop(sem_id, one_writer_go_in, 2); // На этом месте отсекаются все writer'ы кроме одного
 	if (err == -1) {
-		perror("sem only_one_remain_writer ");
+		perror("one writer ");
 		return 4;
 	}
 
-	err = semop(sem_id, &shm_memory, 1);
+	init_semaphore(sem_id, READER_CONNECT, 0);
+	init_semaphore(sem_id, WRITER_CONNECT, 0);
+	init_semaphore(sem_id, FULL, 0);
+	init_semaphore(sem_id, EMPTY, 1);
+
+	struct sembuf connect[2];
+
+	// No SEM_UNDO?
+	//connect[0] = {WRITER_CONNECT, 1, SEM_UNDO};
+	connect[0].sem_num = WRITER_CONNECT;
+	connect[0].sem_op = 1;
+	connect[0].sem_flg = SEM_UNDO;
+	//connect[1] = {READER_CONNECT, 1, SEM_UNDO};
+	connect[1].sem_num = READER_CONNECT;
+	connect[1].sem_op = 1;
+	connect[1].sem_flg = SEM_UNDO;
+
+	err = semop(sem_id, connect, 2); // Приконнекчиваем. Если второй будет идти после отвалившегося первого,
+	// то он не получит второго приконнекта
 	if (err == -1) {
-		perror("sem only_one_remain_writer ");
+		perror("connect from writer ");
+		return 4;
+	}
+
+	struct sembuf check_connect[2]; 
+
+	//check_connect[0] = {READER_CONNECT, -2, 0}; // Тут не NO_WAIT, т.к. нам нужно, что бы оба вошли это синхронизация
+	check_connect[0].sem_num = READER_CONNECT;
+	check_connect[0].sem_op = -2;
+	check_connect[0].sem_flg = 0;
+	//check_connect[1] = {READER_CONNECT, 2, 0};
+	check_connect[1].sem_num = READER_CONNECT;
+	check_connect[1].sem_op = 2;
+	check_connect[1].sem_flg = 0;
+
+	err = semop(sem_id, check_connect, 2); // Проверяет, что второй процесс вошёл
+	if (err == -1) {
+		perror("wait reader error ");
 		return 4;
 	}
 
@@ -71,61 +135,95 @@ int main(int argc, char** argv) {
  		return 6;
  	}
 
- 	only_one_remain_reader.sem_num = 1;
-	only_one_remain_reader.sem_op =  1;
-	only_one_remain_reader.sem_flg = SEM_UNDO;
-
-	err = semop(sem_id, &only_one_remain_writer, 1);
-	if (err == -1) {
-		perror("sem only_one_remain_writer ");
-		return 4;
-	}
-
-	int data_fd = open(DATA_NAME, RD_ONLY);
+	int data_fd = open(DATA_NAME, O_RDONLY);
 	if (data_fd == -1) {
 		perror("data open ");
 		return 5;
 	}
 
-	char data_buf[SHM_SIZE];
+	char data_buf[SHM_SIZE + sizeof(int)];
 	int readed, writed;
 
-	while(1) {
-//Сначала ставим семафор на то, что запрещаем читать
+	/*check_connect[0] = {READER_CONNECT, -2, IPC_NOWAIT}; // Это уже проверка на вшивость
+	check_connect[1] = {READER_CONNECT, 2, 0};
+
+	err = semop(sem_id, check_connect, 2);
+	if (err == -1) { // Если заходим - значит всё-таки отвалился
+		perror("reader before while in writer ");
+		return 4;
+	}*/
+
+	struct sembuf switch_controller[3]; 
+
+	while(1) { //Может стоит записывать номер итерации?
+
+		//switch_controller[0] = {READER_CONNECT, -2, IPC_NOWAIT};
+		switch_controller[0].sem_num = READER_CONNECT;
+		switch_controller[0].sem_op = -2;
+		switch_controller[0].sem_flg = IPC_NOWAIT;
+		//switch_controller[1] = {READER_CONNECT, 2, 0};
+		switch_controller[1].sem_num = READER_CONNECT;
+		switch_controller[1].sem_op = 2;
+		switch_controller[1].sem_flg = 0;
+		//switch_controller[2] = {EMPTY, -1, 0};
+		switch_controller[2].sem_num = EMPTY;
+		switch_controller[2].sem_op = -1;
+		switch_controller[2].sem_flg = 0;
+
+		err = semop(sem_id, switch_controller, 3);
+		if (err == -1) { // Если заходим - значит всё-таки отвалился
+			perror("writer before read from file - reader disconnect ");
+			return 4;
+		}
+
 		readed = read(data_fd, data_buf, SHM_SIZE); 
 		if (readed == -1) {
 			perror("read from data ");
 			return 7;
 		}
 
-		strncpy(shm_ptr, data_fd, readed);
-		if (readed != 0) printf("%s", buf); //Ещё можно выводить просто количество считанного
-//Потом разрешаем читать
-//Потом запрещаем писать?
-		shm_memory.sem_num = 2;
-		shm_memory.sem_op =  1;
-		shm_memory.sem_flg = 0;
+		/*if (readed == 0) {
+			
+			switch_controller[0] = {READER_CONNECT, -2, IPC_NOWAIT};
+			switch_controller[1] = {READER_CONNECT, 2, 0};
+			switch_controller[2] = {FULL, 1, 0};
 
-		err = semop(sem_id, &shm_memory, 1);
+			err = semop(sem_id, switch_controller, 3);
+			if (err == -1) {
+				perror("sem only_one_remain_writer ");
+				return 4;
+			}
+
+			break; // ???
+		}*/
+
+		//(int) data_buf = readed; // На этой строчке записываем количество считанного
+		sprintf(data_buf, readed); // BAD?
+		strncpy(shm_ptr, data_buf + 4, SHM_SIZE); // Тут перезаписываем массив, нужно аккуратно
+		if (readed != 0) printf("%s", data_buf + 4); //Ещё можно выводить просто количество считанного
+
+		//switch_controller[0] = {READER_CONNECT, -2, IPC_NOWAIT};
+		switch_controller[0].sem_num = READER_CONNECT;
+		switch_controller[0].sem_op = -2;
+		switch_controller[0].sem_flg = IPC_NOWAIT;
+		//switch_controller[1] = {READER_CONNECT, 2, 0};
+		switch_controller[1].sem_num = READER_CONNECT;
+		switch_controller[1].sem_op = 2;
+		switch_controller[1].sem_flg = 0;
+		//switch_controller[2] = {FULL, 1, 0};
+		switch_controller[2].sem_num = FULL;
+		switch_controller[2].sem_op = 1;
+		switch_controller[2].sem_flg = 0;
+
+		err = semop(sem_id, switch_controller, 3);
 		if (err == -1) {
-			perror("sem only_one_remain_writer ");
+			perror("writer after read from file - reader disconnect ");
 			return 4;
 		}
 
-		if (readed != SHM_SIZE && readed != 0) continue;
-		if (readed == 0) break;
+		//if (readed != SHM_SIZE && readed != 0) continue;
+		if (readed == 0) break; // ???
 	}
-
-	only_one_remain_writer.sem_num = 0;
-	only_one_remain_writer.sem_op = 1;
-	only_one_remain_writer.sem_flg = SEM_UNDO;
-
-	err = semop(sem_id, &only_one_remain_writer, 1);
-	if (err == -1) {
-		perror("sem only_one_remain_writer ");
-		return 4;
-	}
-
 
 	err = shmdt(shm_ptr);
 	if (err == -1) {
@@ -137,7 +235,10 @@ int main(int argc, char** argv) {
 
 	err = shmctl(shm_id, IPC_RMID, 0);
 	if (err == -1) {
-		perror("shm delete ");
+		perror("shm delete write ");
 		return 8;
 	}
+
+	// Возможно где-то стоит удалить семафоры
+	// В принципе можно Write_connect не убирать, он автоматически освободится
 }
