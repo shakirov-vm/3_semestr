@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
 		return 2;
 	}
 
-	int sem_id = semget(key, NUM_SEMAPHORES, IPC_CREAT | 0666); // Что с установкой значений? 
+	int sem_id = semget(key, NUM_SEMAPHORES, IPC_CREAT | 0666);
 	if (sem_id == -1) {
 		perror("semget ");
 		return 3;
@@ -74,35 +74,34 @@ int main(int argc, char** argv) {
 	}
 
 	struct sembuf check_connect[2]; 
-//Точно ли здесь 2, а не 1?
+
 	//check_connect[0] = {READER_CONNECT, -1, IPC_NOWAIT};
-	check_connect[0].sem_num = READER_CONNECT;
+	check_connect[0].sem_num = WRITER_CONNECT;
 	check_connect[0].sem_op = -1;
 	check_connect[0].sem_flg = IPC_NOWAIT;
 	//check_connect[1] = {READER_CONNECT, 1, 0};
-	check_connect[1].sem_num = READER_CONNECT;
+	check_connect[1].sem_num = WRITER_CONNECT;
 	check_connect[1].sem_op = 1;
 	check_connect[1].sem_flg = 0;
 
 	err = semop(sem_id, check_connect, 2); // Проверяет, что второй процесс вошёл
 	if (err != -1) { // Сюда входит, если изначально READER_CONNECT == 2
-printf("We have check of old\n");
+		printf("We need to disconnect writer\n"); 
 		struct sembuf wait_free_writer[1];
 		//wait_free_writer[0] = {READER_CONNECT, 0, 0}; // Ждём, пока завершится writer, войдёт новый и сконнектится к этому
 		wait_free_writer[0].sem_num = READER_CONNECT;
 		wait_free_writer[0].sem_op = 0;
 		wait_free_writer[0].sem_flg = 0;
 
-		err = semop(sem_id, wait_free_writer, 1); 
+		//err = semop(sem_id, wait_free_writer, 1); 
 		if (err == -1) {
 			perror("wait after one reader death ");
 			return 4;
 		}
 	}
-printf("We must go there\n");
+
 	struct sembuf connect[2];
 
-	// No SEM_UNDO?
 	//connect[0] = {WRITER_CONNECT, 1, SEM_UNDO};
 	connect[0].sem_num = WRITER_CONNECT;
 	connect[0].sem_op = 1;
@@ -118,8 +117,7 @@ printf("We must go there\n");
 		perror("connect from reader ");
 		return 4;
 	}
-printf("We was ++\n");
-printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_semaphore(sem_id, READER_CONNECT)); 
+
 	//check_connect[0] = {WRITER_CONNECT, -2, 0}; // Тут не NO_WAIT, т.к. нам нужно, что бы оба вошли это синхронизация
 	check_connect[0].sem_num = WRITER_CONNECT;
 	check_connect[0].sem_op = -2;
@@ -129,7 +127,6 @@ printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_se
 	check_connect[1].sem_op = 2;
 	check_connect[1].sem_flg = 0;
 
-// Нужно добавить проверку
 	err = semop(sem_id, check_connect, 2); // Проверяет, что второй процесс вошёл
 	if (err == -1) {
 		perror("wait writer error ");
@@ -142,18 +139,9 @@ printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_se
  		perror("shmat ");
  		return 6;
  	}
-sleep(20);
+//sleep(20);
 	char data_buf[SHM_SIZE];
 	int readed, writed = 1;
-
-	/*check_connect[0] = {WRITER_CONNECT, -2, IPC_NOWAIT}; // Это уже проверка на вшивость
-	check_connect[1] = {WRITER_CONNECT, 2, 0};
-
-	err = semop(sem_id, check_connect, 2);
-	if (err == -1) { // Если заходим - значит всё-таки отвалился
-		perror("reader before while in writer ");
-		return 4;
-	}*/
 
 	struct sembuf switch_controller[3]; 
 
@@ -220,12 +208,6 @@ sleep(20);
 		perror("shmdt read ");
 		return 6;
 	}
-
-	/*err = shmctl(shm_id, IPC_RMID, 0);
-	if (err == -1) {
-		perror("shm delete read ");
-		return 8;
-	}*/
 
 	// Возможно где-то стоит удалить семафоры
 	// В принципе можно Read_connect не убирать, он автоматически освободится

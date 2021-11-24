@@ -15,14 +15,7 @@
 #define PROJ_ID 0xDEADBEAF
 #define DATA_NAME argv[1]
 #define NUM_SEMAPHORES 6
-/*
-#define ONE_WRITER sem_id[0]
-#define ONE_READER sem_id[1]
-#define WRITER_CONNECT sem_id[2]
-#define READER_CONNECT sem_id[3]
-#define EMPTY sem_id[4]
-#define FULL sem_id[5]
-*/
+
 enum {
 
 	ONE_WRITER = 0,
@@ -96,30 +89,26 @@ int main(int argc, char** argv) {
 	}
 
 	struct sembuf check_connect[2]; 
-//Точно ли здесь 2, а не 1?
+
 	//check_connect[0] = {WRITER_CONNECT, -1, IPC_NOWAIT};
-	check_connect[0].sem_num = WRITER_CONNECT;
+	check_connect[0].sem_num = READER_CONNECT;
 	check_connect[0].sem_op = -1;
 	check_connect[0].sem_flg = IPC_NOWAIT;
 	//check_connect[1] = {WRITER_CONNECT, 1, 0};
-	check_connect[1].sem_num = WRITER_CONNECT;
+	check_connect[1].sem_num = READER_CONNECT;
 	check_connect[1].sem_op = 1;
 	check_connect[1].sem_flg = 0;
-// We'v got a PROBLEM!!
-	printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_semaphore(sem_id, READER_CONNECT)); 
-	printf("WE ARE BEFORE CHECK WAIT\n");
-//Тут бы ещё разделить EAGAIN с остальным
+
 	err = semop(sem_id, check_connect, 2); // Проверяет, что второй процесс вошёл
 	if (err != -1) { // Сюда входит, если изначально WRITER_CONNECT == 1
-		printf("We need to disconnect reader\n"); // ??? Или здесь тоже просто ждём??
-		printf("We have check of old\n");
+		printf("We need to disconnect reader\n"); 
 		struct sembuf wait_free_writer[1];
 		//wait_free_writer[0] = {READER_CONNECT, 0, 0}; // Ждём, пока завершится writer, войдёт новый и сконнектится к этому
 		wait_free_writer[0].sem_num = READER_CONNECT;
 		wait_free_writer[0].sem_op = 0;
 		wait_free_writer[0].sem_flg = 0;
 
-		err = semop(sem_id, wait_free_writer, 1); 
+		//err = semop(sem_id, wait_free_writer, 1); 
 		if (err == -1) {
 			perror("wait after one reader death ");
 			return 4;
@@ -133,7 +122,6 @@ int main(int argc, char** argv) {
 
 	struct sembuf connect[2];
 
-	// No SEM_UNDO?
 	//connect[0] = {WRITER_CONNECT, 1, SEM_UNDO};
 	connect[0].sem_num = WRITER_CONNECT;
 	connect[0].sem_op = 1;
@@ -149,9 +137,6 @@ int main(int argc, char** argv) {
 		perror("connect from writer ");
 		return 4;
 	}
-printf("We ++\n");
-	printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_semaphore(sem_id, READER_CONNECT)); 
-	//struct sembuf check_connect[2]; 
 
 	//check_connect[0] = {READER_CONNECT, -2, 0}; // Тут не NO_WAIT, т.к. нам нужно, что бы оба вошли это синхронизация
 	check_connect[0].sem_num = READER_CONNECT;
@@ -185,15 +170,6 @@ printf("We ++\n");
 	char data_buf[SHM_SIZE + sizeof(int)];
 	int readed, writed;
 
-	/*check_connect[0] = {READER_CONNECT, -2, IPC_NOWAIT}; // Это уже проверка на вшивость
-	check_connect[1] = {READER_CONNECT, 2, 0};
-
-	err = semop(sem_id, check_connect, 2);
-	if (err == -1) { // Если заходим - значит всё-таки отвалился
-		perror("reader before while in writer ");
-		return 4;
-	}*/
-
 	struct sembuf switch_controller[3]; 
 
 	while(1) { //Может стоит записывать номер итерации?
@@ -223,21 +199,6 @@ printf("We ++\n");
 			return 7;
 		}
 
-		/*if (readed == 0) {
-			
-			switch_controller[0] = {READER_CONNECT, -2, IPC_NOWAIT};
-			switch_controller[1] = {READER_CONNECT, 2, 0};
-			switch_controller[2] = {FULL, 1, 0};
-
-			err = semop(sem_id, switch_controller, 3);
-			if (err == -1) {
-				perror("sem only_one_remain_writer ");
-				return 4;
-			}
-
-			break; // ???
-		}*/
-
 		*((int*) shm_ptr) = readed;
 		strncpy(shm_ptr + 4, data_buf + 4, SHM_SIZE); // Тут перезаписываем массив, нужно аккуратно
 
@@ -262,8 +223,7 @@ printf("We ++\n");
 			return 4;
 		}
 
-		//if (readed != SHM_SIZE && readed != 0) continue;
-		if (readed == 0) break; // ???
+		if (readed == 0) break;
 	}
 
 	err = shmdt(shm_ptr);
@@ -273,13 +233,7 @@ printf("We ++\n");
 	}
 
 	close(data_fd);
-
-	/*err = shmctl(shm_id, IPC_RMID, 0);
-	if (err == -1) {
-		perror("shm delete write ");
-		return 8;
-	}*/
-
+	
 	// Возможно где-то стоит удалить семафоры
 	// В принципе можно Write_connect не убирать, он автоматически освободится
 }
