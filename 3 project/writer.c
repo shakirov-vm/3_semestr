@@ -13,7 +13,7 @@
 #define SHM_SIZE 256
 #define SHM_NAME "shm_general"
 #define PROJ_ID 0xDEADBEAF
-#define DATA_NAME argv[2]
+#define DATA_NAME argv[1]
 #define NUM_SEMAPHORES 6
 /*
 #define ONE_WRITER sem_id[0]
@@ -43,6 +43,13 @@ int init_semaphore(int sem_id, int semnum, int initval) {
 	union semun semopts;
 	semopts.val = initval;
 	return semctl(sem_id, semnum, SETVAL, semopts);
+}
+
+int get_semaphore(int sem_id, int semnum) {
+
+	int value = semctl(sem_id, semnum, GETVAL);
+
+	return value;
 }
 
 int main(int argc, char** argv) {
@@ -88,8 +95,39 @@ int main(int argc, char** argv) {
 		return 4;
 	}
 
-	init_semaphore(sem_id, READER_CONNECT, 0);
-	init_semaphore(sem_id, WRITER_CONNECT, 0);
+	struct sembuf check_connect[2]; 
+//Точно ли здесь 2, а не 1?
+	//check_connect[0] = {WRITER_CONNECT, -1, IPC_NOWAIT};
+	check_connect[0].sem_num = WRITER_CONNECT;
+	check_connect[0].sem_op = -1;
+	check_connect[0].sem_flg = IPC_NOWAIT;
+	//check_connect[1] = {WRITER_CONNECT, 1, 0};
+	check_connect[1].sem_num = WRITER_CONNECT;
+	check_connect[1].sem_op = 1;
+	check_connect[1].sem_flg = 0;
+// We'v got a PROBLEM!!
+	printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_semaphore(sem_id, READER_CONNECT)); 
+	printf("WE ARE BEFORE CHECK WAIT\n");
+//Тут бы ещё разделить EAGAIN с остальным
+	err = semop(sem_id, check_connect, 2); // Проверяет, что второй процесс вошёл
+	if (err != -1) { // Сюда входит, если изначально WRITER_CONNECT == 1
+		printf("We need to disconnect reader\n"); // ??? Или здесь тоже просто ждём??
+		printf("We have check of old\n");
+		struct sembuf wait_free_writer[1];
+		//wait_free_writer[0] = {READER_CONNECT, 0, 0}; // Ждём, пока завершится writer, войдёт новый и сконнектится к этому
+		wait_free_writer[0].sem_num = READER_CONNECT;
+		wait_free_writer[0].sem_op = 0;
+		wait_free_writer[0].sem_flg = 0;
+
+		err = semop(sem_id, wait_free_writer, 1); 
+		if (err == -1) {
+			perror("wait after one reader death ");
+			return 4;
+		}
+		//init_semaphore(sem_id, READER_CONNECT, 0);
+		//init_semaphore(sem_id, WRITER_CONNECT, 0);
+	}
+
 	init_semaphore(sem_id, FULL, 0);
 	init_semaphore(sem_id, EMPTY, 1);
 
@@ -111,8 +149,9 @@ int main(int argc, char** argv) {
 		perror("connect from writer ");
 		return 4;
 	}
-
-	struct sembuf check_connect[2]; 
+printf("We ++\n");
+	printf("WR_CN - %d, RD_CN - %d\n", get_semaphore(sem_id, WRITER_CONNECT), get_semaphore(sem_id, READER_CONNECT)); 
+	//struct sembuf check_connect[2]; 
 
 	//check_connect[0] = {READER_CONNECT, -2, 0}; // Тут не NO_WAIT, т.к. нам нужно, что бы оба вошли это синхронизация
 	check_connect[0].sem_num = READER_CONNECT;
@@ -128,15 +167,17 @@ int main(int argc, char** argv) {
 		perror("wait reader error ");
 		return 4;
 	}
-
+	
+	printf("We connect\n");
 	char* shm_ptr = shmat (shm_id, NULL, 0);
  	if (shm_ptr == -1) {//??
  		perror("shmat ");
  		return 6;
  	}
-
+//exit(100);
 	int data_fd = open(DATA_NAME, O_RDONLY);
 	if (data_fd == -1) {
+		printf("[%s]\n", DATA_NAME);
 		perror("data open ");
 		return 5;
 	}
@@ -176,7 +217,7 @@ int main(int argc, char** argv) {
 			return 4;
 		}
 
-		readed = read(data_fd, data_buf, SHM_SIZE); 
+		readed = read(data_fd, data_buf + sizeof(int), SHM_SIZE); 
 		if (readed == -1) {
 			perror("read from data ");
 			return 7;
@@ -197,10 +238,10 @@ int main(int argc, char** argv) {
 			break; // ???
 		}*/
 
-		//(int) data_buf = readed; // На этой строчке записываем количество считанного
-		sprintf(data_buf, readed); // BAD?
-		strncpy(shm_ptr, data_buf + 4, SHM_SIZE); // Тут перезаписываем массив, нужно аккуратно
-		if (readed != 0) printf("%s", data_buf + 4); //Ещё можно выводить просто количество считанного
+		*((int*) shm_ptr) = readed;
+		strncpy(shm_ptr + 4, data_buf + 4, SHM_SIZE); // Тут перезаписываем массив, нужно аккуратно
+
+		if (readed != 0) printf("[%s]\nnumber - %d\n", data_buf + 4, *((int*) shm_ptr) ); //Ещё можно выводить просто количество считанного
 
 		//switch_controller[0] = {READER_CONNECT, -2, IPC_NOWAIT};
 		switch_controller[0].sem_num = READER_CONNECT;
@@ -233,11 +274,11 @@ int main(int argc, char** argv) {
 
 	close(data_fd);
 
-	err = shmctl(shm_id, IPC_RMID, 0);
+	/*err = shmctl(shm_id, IPC_RMID, 0);
 	if (err == -1) {
 		perror("shm delete write ");
 		return 8;
-	}
+	}*/
 
 	// Возможно где-то стоит удалить семафоры
 	// В принципе можно Write_connect не убирать, он автоматически освободится
