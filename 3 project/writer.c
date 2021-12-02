@@ -170,8 +170,6 @@ print_sem(sem_id);
 printf("\n\nIt before while\n\n");
 	while(1) { //Может стоит записывать номер итерации?
 
-	print_sem(sem_id);
-
 		switch_controller[0].sem_num = SUMM_CONNECT;
 		switch_controller[0].sem_op = -read_connect_sem * 2;
 		switch_controller[0].sem_flg = IPC_NOWAIT;
@@ -180,16 +178,16 @@ printf("\n\nIt before while\n\n");
 		switch_controller[1].sem_op = read_connect_sem * 2;
 		switch_controller[1].sem_flg = 0;
 
-		switch_controller[2].sem_num = EMPTY;
+		switch_controller[2].sem_num = READER_CONNECT;
 		switch_controller[2].sem_op = -1;
-		switch_controller[2].sem_flg = SEM_UNDO;
+		switch_controller[2].sem_flg = IPC_NOWAIT;
 
 		switch_controller[3].sem_num = READER_CONNECT;
-		switch_controller[3].sem_op = -1;
-		switch_controller[3].sem_flg = IPC_NOWAIT;
+		switch_controller[3].sem_op = 1;
+		switch_controller[3].sem_flg = 0;
 
-		switch_controller[4].sem_num = READER_CONNECT;
-		switch_controller[4].sem_op = 1;
+		switch_controller[4].sem_num = EMPTY;
+		switch_controller[4].sem_op = -1;
 		switch_controller[4].sem_flg = 0;
 
 		err = semop(sem_id, switch_controller, 5);
@@ -197,12 +195,14 @@ printf("\n\nIt before while\n\n");
 			perror("writer before read from file - reader disconnect ");
 			return 4;
 		}
-printf("FIRST\n");
+
 		readed = read(data_fd, data_buf + sizeof(int), SHM_SIZE); 
 		if (readed == -1) {
 			perror("read from data ");
 			return 7;
 		}
+
+//exit(100);
 
 		*((int*) shm_ptr) = readed;
 		strncpy(shm_ptr + 4, data_buf + 4, SHM_SIZE); // Тут перезаписываем массив, нужно аккуратно
@@ -217,15 +217,15 @@ printf("FIRST\n");
 		switch_controller[1].sem_op = read_connect_sem * 2;
 		switch_controller[1].sem_flg = 0;
 
-		switch_controller[2].sem_num = FULL;
-		switch_controller[2].sem_op = 1;
-		switch_controller[2].sem_flg = SEM_UNDO;
+		switch_controller[2].sem_num = READER_CONNECT;
+		switch_controller[2].sem_op = -1;
+		switch_controller[2].sem_flg = IPC_NOWAIT;
 
 		switch_controller[3].sem_num = READER_CONNECT;
-		switch_controller[3].sem_op = -1;
-		switch_controller[3].sem_flg = IPC_NOWAIT;
+		switch_controller[3].sem_op = 1;
+		switch_controller[3].sem_flg = 0;
 
-		switch_controller[4].sem_num = READER_CONNECT;
+		switch_controller[4].sem_num = FULL;
 		switch_controller[4].sem_op = 1;
 		switch_controller[4].sem_flg = 0;
 
@@ -234,9 +234,7 @@ printf("FIRST\n");
 			perror("writer after read from file - reader disconnect ");
 			return 4;
 		}
-		printf("SECOND\n");
-		print_sem(sem_id);
-		printf("\n after \n\n");
+
 		if (readed == 0) break;
 	}
 

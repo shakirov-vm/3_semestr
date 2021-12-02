@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define SHM_SIZE 256
 #define SHM_NAME "shm_general"
@@ -117,7 +118,7 @@ int main(int argc, char** argv) {
  		perror("shmat ");
  		return 6;
  	}
-//sleep(20);
+
 	char data_buf[SHM_SIZE];
 	int readed, writed = 1;
 
@@ -153,16 +154,16 @@ int main(int argc, char** argv) {
 		switch_controller[1].sem_op = write_connect_sem * 2;
 		switch_controller[1].sem_flg = 0;
 
-		switch_controller[2].sem_num = FULL;
+		switch_controller[2].sem_num = WRITER_CONNECT;
 		switch_controller[2].sem_op = -1;
-		switch_controller[2].sem_flg = SEM_UNDO;
+		switch_controller[2].sem_flg = IPC_NOWAIT;
 
 		switch_controller[3].sem_num = WRITER_CONNECT;
-		switch_controller[3].sem_op = -1;
-		switch_controller[3].sem_flg = IPC_NOWAIT;
+		switch_controller[3].sem_op = 1;
+		switch_controller[3].sem_flg = 0;
 
-		switch_controller[4].sem_num = WRITER_CONNECT;
-		switch_controller[4].sem_op = 1;
+		switch_controller[4].sem_num = FULL;
+		switch_controller[4].sem_op = -1;
 		switch_controller[4].sem_flg = 0;
 
 		err = semop(sem_id, switch_controller, 5);
@@ -174,13 +175,13 @@ int main(int argc, char** argv) {
 			}
 		}
 
+sleep(20);
+
 		writed = *((int*) shm_ptr);
 
 		shm_ptr += 4; 
 		strncpy(data_buf, shm_ptr, writed);
-
-	print_sem(sem_id);
-exit(10);
+//exit(10);
 		int tmp = writed;
 		for(int i = writed; i != SHM_SIZE; i++) shm_ptr[i] = 0;
 
@@ -195,15 +196,15 @@ exit(10);
 		switch_controller[1].sem_op = write_connect_sem * 2;
 		switch_controller[1].sem_flg = 0;
 
-		switch_controller[2].sem_num = EMPTY;
-		switch_controller[2].sem_op = 1;
-		switch_controller[2].sem_flg = SEM_UNDO;
+		switch_controller[2].sem_num = WRITER_CONNECT;
+		switch_controller[2].sem_op = -1;
+		switch_controller[2].sem_flg = IPC_NOWAIT;
 
 		switch_controller[3].sem_num = WRITER_CONNECT;
-		switch_controller[3].sem_op = -1;
-		switch_controller[3].sem_flg = IPC_NOWAIT;
+		switch_controller[3].sem_op = 1;
+		switch_controller[3].sem_flg = 0;
 
-		switch_controller[4].sem_num = WRITER_CONNECT;
+		switch_controller[4].sem_num = EMPTY;
 		switch_controller[4].sem_op = 1;
 		switch_controller[4].sem_flg = 0;
 
