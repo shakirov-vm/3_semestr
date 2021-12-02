@@ -10,6 +10,8 @@
 #define FIFO_TRANSMIT "./name_transmit"
 #define UNIQ_LENGTH 10
 
+int check_the_same(int one_fd, int two_fd);
+
 int main(int argc, char* argv[]) {
 
 	int err = 0;
@@ -54,13 +56,21 @@ int main(int argc, char* argv[]) {
 		return 2;
 	}
 //sleep(3);
-	int uniq_write = open(FIFO_uniq, O_WRONLY);
+	int uniq_write = open(FIFO_uniq, O_WRONLY | O_NONBLOCK);
 	if (uniq_write == -1) {
 		printf("Uniq is [%s]\n", FIFO_uniq);
 		perror("open uniq for write ");
 		return 3;
 	}
 
+	int val = fcntl(uniq_write, F_SETFL, O_WRONLY);
+	if (val == -1) {
+		printf("Fcntl is bad\n");
+		perror("fcntl failed ");
+		return 5;
+	}
+
+	check_the_same(transmit_read, uniq_write);
 	printf("Processes connect\n");
 
 	while(1) {
@@ -77,7 +87,7 @@ int main(int argc, char* argv[]) {
 			return 4;
 		}
 
-		printf("%s", buf);
+		//printf("%s", buf);
 
 		if (writed != readed) {
 			printf("readed - %d, writed - %d\n", readed, writed);
@@ -87,5 +97,18 @@ int main(int argc, char* argv[]) {
 	}
 	printf("\n");
 	printf("Write end\n");
+	return 0;
+}
+
+int check_the_same(int one_fd, int two_fd) {
+	printf("We there\n");
+	struct stat one_stat;
+	struct stat two_stat;
+
+	fstat(one_fd, &one_stat);
+	fstat(two_fd, &two_stat);
+
+	printf("\n\n\none is %lu, two is %lu\n\n\n\n", one_stat.st_ino, two_stat.st_ino);
+
 	return 0;
 }

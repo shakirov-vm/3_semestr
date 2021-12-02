@@ -111,6 +111,11 @@ int printer(size_t biggest) {
 			printf("We don't recieve in %ld\n", process_num);
 		}
 
+		/*setvbuf(stdout, NULL, _IONBF, 0);
+		if (err != 0) {
+			printf("SETVBUF FAIL\n");
+		}
+		printf("%ld ", process_num);*/
 		printf("%ld\n", process_num);
 
 		buffer.mtype = process_num + 1;

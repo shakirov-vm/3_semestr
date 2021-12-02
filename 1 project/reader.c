@@ -39,20 +39,17 @@ int main() {
 		return 2;
 	}
 
-//int dataFifo = OpenFifo (dataFifoName, O_RDONLY | O_NONBLOCK);
 	int uniq_read = open(FIFO_uniq, O_RDONLY | O_NONBLOCK);
 	if (uniq_read == -1) {
 		perror("uniq open for read ");
 		return 3;
 	}
 
-
 	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
 	if (writed == -1) {
 		perror("write in transmit ");
 		return 4;
 	}
-	
 
 	int val = fcntl(uniq_read, F_SETFL, O_RDONLY);
 	if (val == -1) {
@@ -85,6 +82,6 @@ int main() {
 		if (readed != MAX_BUF) continue;
 	}
 	printf("\n");
-	printf("Reader end\n");
+	printf("Read end\n");
 	return 0;
 }

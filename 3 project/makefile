@@ -6,3 +6,5 @@ run_wr:
 	./writer text.c
 run_rd:
 	./reader
+clear_sem:
+	./clear
