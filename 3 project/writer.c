@@ -128,7 +128,6 @@ int main(int argc, char** argv) {
 	init_semaphore(sem_id, FULL, 0);
 	init_semaphore(sem_id, EMPTY, 1);
 	
-	printf("We connect\n");
 	char* shm_ptr = shmat (shm_id, NULL, 0);
  	if (shm_ptr == -1) {//??
  		perror("shmat ");
@@ -162,12 +161,13 @@ int main(int argc, char** argv) {
 			return 4;
 		}
 	}
-printf("Reader connect, %d\n", get_semaphore(sem_id, READER_CONNECT));
+
+	printf("We connect\n");
+
 	struct sembuf switch_controller[5];
 
 	int read_connect_sem = get_semaphore(sem_id, SUMM_READ_CONNECT);
-print_sem(sem_id);
-printf("\n\nIt before while\n\n");
+
 	while(1) { //Может стоит записывать номер итерации?
 
 		switch_controller[0].sem_num = SUMM_CONNECT;
@@ -201,8 +201,6 @@ printf("\n\nIt before while\n\n");
 			perror("read from data ");
 			return 7;
 		}
-
-//exit(100);
 
 		*((int*) shm_ptr) = readed;
 		strncpy(shm_ptr + 4, data_buf + 4, SHM_SIZE); // Тут перезаписываем массив, нужно аккуратно

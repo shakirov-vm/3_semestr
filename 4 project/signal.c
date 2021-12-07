@@ -22,6 +22,8 @@ int bit = 0;
 
 int main(int argc, char** argv) {
 
+	int err = 0;
+
 	if (argc != 2) {
 		printf("Invalid number of ar(gs\n");
 				exit(1);
@@ -32,7 +34,7 @@ int main(int argc, char** argv) {
 	sigdelset(&init_mask, SIGCHLD);
 	sigdelset(&init_mask, SIGINT);
 	sigprocmask(SIG_SETMASK, &init_mask, NULL);
-
+//sleep(5);
 	sigset_t set_start;
 	sigfillset(&set_start);
 
@@ -40,11 +42,16 @@ int main(int argc, char** argv) {
 	set_sig_child_handle.sa_handler = child_dead;
 	set_sig_child_handle.sa_mask = set_start;
 	set_sig_child_handle.sa_flags = SA_NOCLDWAIT;
-	sigaction(SIGCHLD, &set_sig_child_handle, NULL);
+	err = sigaction(SIGCHLD, &set_sig_child_handle, NULL);
+	if (err == -1) {
+		perror("sigaction child_dead ");
+		exit(1);
+	}
+
 
 	int pid = fork();
 
-	if (pid == 0) { //child 
+	if (pid == 0) { //child
 
 		prctl (PR_SET_PDEATHSIG, SIGKILL);
 		
@@ -83,14 +90,16 @@ int main(int argc, char** argv) {
 
         while(1) {
         	readed = read(fd, buf, BUFSIZE);
-        	printf("BUF: [%s]\n/////////////////////////////////////////////\n", buf);
+        	printf("BUF: [%s]\n\n", buf);
         	if (readed == -1) {
         		//How we handle there?
         		printf("What we do there?\n");
         	}
 
         	for(int buf_pos = 0; buf_pos < readed; buf_pos++) {
+
         		symbol = buf[buf_pos];
+				//printf("child - [%d]\n", symbol);
 
         		for(int i = 0; i < 8; i++) {
         			bit_write = symbol % 2;
@@ -113,12 +122,13 @@ int main(int argc, char** argv) {
 
         	if (readed == 0) break;
         }
-        printf("Child end\n");
+
 	} else { //parent
 
 		sigset_t full_set;
 		sigfillset(&full_set);
 		sigdelset(&full_set, SIGCHLD); // Здесь если прилетает SIGCHLD - выходим
+		//sigdelset(&full_set, SIGINT);
 
 		struct sigaction set_sig_usr1_handle;
 		set_sig_usr1_handle.sa_handler = parent_one;
@@ -145,18 +155,18 @@ int main(int argc, char** argv) {
 				sigfillset (&get_bit);
 				sigdelset (&get_bit, SIGUSR1);
 				sigdelset (&get_bit, SIGUSR2);
+				sigdelset (&get_bit, SIGCHLD);
+
 				sigsuspend (&get_bit);
-				//printf("bit - %d, bit << i - %d, symbol - %d, symbol | (bit << i) - %d, i - %d\n", bit, bit << i, symbol, symbol | (bit << i), i);
+				
 				symbol = symbol | (bit << i);
 
-				//printf("in parent: %d - [%c]\n", symbol, symbol);
 				kill(pid, SIGUSR1);
 			}
 
-			printf("%c", symbol);
+			printf("parent - [%d]\n", symbol);
+			if (symbol == 0) break;
 		}
-
-		printf("Parent end\n");
 	}
 }
 

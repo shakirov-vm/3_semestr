@@ -8,3 +8,5 @@ run_rd:
 	./reader
 clear_sem:
 	./clear
+print_sem:
+	./sem_print

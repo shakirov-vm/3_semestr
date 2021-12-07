@@ -73,7 +73,6 @@ int main(int argc, char** argv) {
 		return 3;
 	}
 
-
 	struct sembuf one_reader_go_in[2];
 
 	one_reader_go_in[0].sem_num = ONE_READER;
@@ -84,7 +83,7 @@ int main(int argc, char** argv) {
 	one_reader_go_in[1].sem_op = 1;
 	one_reader_go_in[1].sem_flg = SEM_UNDO;
 
-	err = semop(sem_id, one_reader_go_in, 2); // На этом месте отсекаются все writer'ы кроме одного
+	err = semop(sem_id, one_reader_go_in, 2); // На этом месте отсекаются все reader'ы кроме одного
 	if (err == -1) {
 		perror("one reader ");
 		return 4;
@@ -112,7 +111,6 @@ int main(int argc, char** argv) {
 		}
 	}
 	
-	printf("We connect\n");
 	char* shm_ptr = shmat (shm_id, NULL, 0);
  	if (shm_ptr == -1) {//??
  		perror("shmat ");
@@ -139,6 +137,8 @@ int main(int argc, char** argv) {
 			return 4;
 		}
 	}
+
+	printf("We connect\n");
 
 	struct sembuf switch_controller[5]; 
 
@@ -175,13 +175,11 @@ int main(int argc, char** argv) {
 			}
 		}
 
-sleep(20);
-
 		writed = *((int*) shm_ptr);
 
 		shm_ptr += 4; 
 		strncpy(data_buf, shm_ptr, writed);
-//exit(10);
+
 		int tmp = writed;
 		for(int i = writed; i != SHM_SIZE; i++) shm_ptr[i] = 0;
 
