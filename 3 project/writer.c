@@ -10,7 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define SHM_SIZE 256
+#define SHM_SIZE 5
 #define SHM_NAME "shm_general"
 #define PROJ_ID 0xDEADBEAF
 #define DATA_NAME argv[1]
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
 			return 4;
 		}
 	}
-
+//Вот здесь критическая секция. Другой процесс может изменять эти же семафоры (если это не первый вошедший writer)
 	init_semaphore(sem_id, FULL, 0);
 	init_semaphore(sem_id, EMPTY, 1);
 	
@@ -155,6 +155,44 @@ int main(int argc, char** argv) {
 	wait_connect[1].sem_flg = 0;
 
 	err = semop(sem_id, wait_connect, 2);
+	if (err != -1) { 
+		if (err == -1) {
+			perror("wait connect : ");
+			return 4;
+		}
+	}
+
+	struct sembuf check_overflow[7];
+
+	check_overflow[0].sem_num = SUMM_CONNECT;
+	check_overflow[0].sem_op = -100;
+	check_overflow[0].sem_flg = IPC_NOWAIT;
+
+	check_overflow[1].sem_num = SUMM_CONNECT;
+	check_overflow[1].sem_op =  100;
+	check_overflow[1].sem_flg = 0;
+
+	check_overflow[2].sem_num = READER_CONNECT;
+	check_overflow[2].sem_op = -1;
+	check_overflow[2].sem_flg = IPC_NOWAIT;
+
+	check_overflow[3].sem_num = READER_CONNECT;
+	check_overflow[3].sem_op = 1;
+	check_overflow[3].sem_flg = 0;
+//get_semaphore is good there? we don't always want 0
+	check_overflow[4].sem_num = SUMM_CONNECT;
+	check_overflow[4].sem_op = -get_semaphore(sem_id, SUMM_CONNECT);
+	check_overflow[4].sem_flg = 0;
+
+	check_overflow[5].sem_num = SUMM_READ_CONNECT;
+	check_overflow[5].sem_op = -get_semaphore(sem_id, SUMM_READ_CONNECT);
+	check_overflow[5].sem_flg = 0;
+
+	check_overflow[6].sem_num = SUMM_WRIT_CONNECT;
+	check_overflow[6].sem_op = -get_semaphore(sem_id, SUMM_WRIT_CONNECT);
+	check_overflow[6].sem_flg = 0;
+
+	err = semop(sem_id, check_overflow, 7);
 	if (err != -1) { 
 		if (err == -1) {
 			perror("wait connect : ");

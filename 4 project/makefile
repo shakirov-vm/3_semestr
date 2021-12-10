@@ -1,4 +1,4 @@
 compile:
-	gcc signal.c
+	gcc signal.c -o signal
 run:
-	./a.out easy
+	./signal test.txt

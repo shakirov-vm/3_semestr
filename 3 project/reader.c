@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define SHM_SIZE 256
+#define SHM_SIZE 5
 #define SHM_NAME "shm_general"
 #define PROJ_ID 0xDEADBEAF
 #define NUM_SEMAPHORES 9
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
 		perror("ftok ");
 		return 1;
 	}
-
+//может быть гонка за создание между всеми
 	int shm_id = shmget(key, SHM_SIZE, IPC_CREAT | 0666);
 	if (shm_id == -1) {
 		perror("shmget ");
@@ -83,6 +83,7 @@ int main(int argc, char** argv) {
 	one_reader_go_in[1].sem_op = 1;
 	one_reader_go_in[1].sem_flg = SEM_UNDO;
 
+	//На 87 строке идёт гонка за то, кто прибавит за разделяемую память - и до конца программы - пока не сработает SEM_UNDO
 	err = semop(sem_id, one_reader_go_in, 2); // На этом месте отсекаются все reader'ы кроме одного
 	if (err == -1) {
 		perror("one reader ");
@@ -102,7 +103,7 @@ int main(int argc, char** argv) {
 	check_connect[2].sem_num = READER_CONNECT;
 	check_connect[2].sem_op = 1;
 	check_connect[2].sem_flg = SEM_UNDO;
-
+	//Может возникнуть гонка между прошедшими reader'ом и writer'ом за прибавление семафора SUMM_CONNECT. Хотя результат будет одинаков в обоих случаях
 	err = semop(sem_id, check_connect, 3);
 	if (err != -1) { 
 		if (err == -1) {
@@ -129,7 +130,7 @@ int main(int argc, char** argv) {
 	wait_connect[1].sem_num = WRITER_CONNECT;
 	wait_connect[1].sem_op = 1;
 	wait_connect[1].sem_flg = 0;
-
+	// Reader пытается проверить, а writer прибавляет 1 - может быть параллельным (далее тоже есть такие секции на проверках)
 	err = semop(sem_id, wait_connect, 2);
 	if (err != -1) { 
 		if (err == -1) {
@@ -165,7 +166,8 @@ int main(int argc, char** argv) {
 		switch_controller[4].sem_num = FULL;
 		switch_controller[4].sem_op = -1;
 		switch_controller[4].sem_flg = 0;
-
+		// Между reader'ом и writer'ом - могла бы возникать борьба за изменения SUMM_CONNECT. Но операции атомарны
+		// А вообще-то во время проверки ещё мог бы отвалиться второй процесс и сработать SEM_UNDO
 		err = semop(sem_id, switch_controller, 5);
 		if (err == -1) { // Если заходим - значит всё-таки отвалился
 			writed = *((int*) shm_ptr);
@@ -174,7 +176,7 @@ int main(int argc, char** argv) {
 				return 4;
 			}
 		}
-
+		//Со 171 до 211 - запись в разделяемую память, race condition разрешена
 		writed = *((int*) shm_ptr);
 
 		shm_ptr += 4; 

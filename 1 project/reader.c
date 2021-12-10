@@ -38,7 +38,7 @@ int main() {
 		perror("mk uniq fifo ");
 		return 2;
 	}
-
+//Отсюда и до 67 строки идёт борьба между reader'ом и writer'ом за изменение информации в ядре об открытии FIFO
 	int uniq_read = open(FIFO_uniq, O_RDONLY | O_NONBLOCK);
 	if (uniq_read == -1) {
 		perror("uniq open for read ");
@@ -63,7 +63,6 @@ int main() {
 		return 4;
 	}
 	printf("We ready for read\n");
-//exit(100);
 	printf("Wait 3 seconds\n");
 	sleep(3);
 
