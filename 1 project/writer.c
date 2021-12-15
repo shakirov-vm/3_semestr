@@ -41,6 +41,7 @@ int main(int argc, char* argv[]) {
 		return 3;
 	}
 // вот тут критическая секция - между writer'ами идёт борьба за уникальное имя из FIFO
+//От сюда
 	int readed = read(transmit_read, FIFO_uniq, UNIQ_LENGTH);
   	if (readed != UNIQ_LENGTH) {
   		if (readed == -1) perror("read from transmit");
@@ -56,6 +57,7 @@ int main(int argc, char* argv[]) {
 		return 2;
 	}
 //Отсюда и до 84 строки идёт борьба между reader'ом и writer'ом за изменение информации в ядре об открытии FIFO
+//До сюда
 	int uniq_write = open(FIFO_uniq, O_WRONLY | O_NONBLOCK);
 	if (uniq_write == -1) {
 		printf("Uniq is [%s]\n", FIFO_uniq);

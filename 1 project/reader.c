@@ -44,7 +44,7 @@ int main() {
 		perror("uniq open for read ");
 		return 3;
 	}
-
+//Начиная отсюда
 	int writed = write(transmit_write, FIFO_uniq, UNIQ_LENGTH);
 	if (writed == -1) {
 		perror("write in transmit ");
@@ -64,10 +64,10 @@ int main() {
 	}
 	printf("We ready for read\n");
 	printf("Wait 3 seconds\n");
-	sleep(3);
+	//sleep(3);
 
 	while(1) {
-
+// И до сюда
 		readed = read(uniq_read, buf, MAX_BUF);
 		if (readed == -1) {
 			perror("read from uniq ");

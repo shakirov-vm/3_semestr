@@ -50,21 +50,30 @@ int main(int argc, char** argv) {
 		perror("sigaction child_dead ");
 		exit(1);
 	}
-sigaction//
+	
+//	sigaction//
+// Отсюда и до строки за сигнал от родителя ребёнку
 	int pid = fork();
-	sigprocmask
+//Если USR1 придёт в этот момент, то зависнем на sigsuspend
+//	sigprocmask
+
 	if (pid == -1) {
 		perror("fork ");
 		exit(1);
 	}
 
 	if (pid == 0) { //child
-
+// Отсюда до сравнения с getppid идёт борьба за маску - за установку prctl
 		err = prctl(PR_SET_PDEATHSIG, SIGKILL);
 		if (err == -1) {
 			perror("prctl ");
 			exit(1);
 		}
+	        int ppid = getppid();
+	        if (ppid == 1) {
+	        	printf("parent is dead\n");
+	        	exit(1);
+	        }
 
 		int fd = open(filename, O_RDONLY);
 		if (fd == -1) {
@@ -89,70 +98,65 @@ sigaction//
 		set_sig_usr2_handle.sa_handler = child_two;
 		set_sig_usr2_handle.sa_mask = full_set;
 		set_sig_usr2_handle.sa_flags = 0;
-		err	= sigaction(SIGUSR2, &set_sig_usr2_handle, NULL);
+		err = sigaction(SIGUSR2, &set_sig_usr2_handle, NULL);
 		if (err == -1) {
 			perror("sigaction USR2 in child ");
 			exit(1);
 		}
 
 		sigset_t parent_ready = {};
-        sigfillset(&parent_ready);
-        sigdelset(&parent_ready, SIGUSR1);
-        sigsuspend(&parent_ready);
-//Вот до сюда от fork - race condition - за то, чтобы сигнал пришёл в маску пришедших сигналов ребёнка или блок
-        char buf[BUFSIZE] = {};
-        char symbol = 0;
-        int readed = 0;
-        int ppid = getppid();
-        if (ppid == 1) {
-        	printf("parent is dead\n");
-        	exit(1);
-        }
-        int bit_write = 0;
+	        sigfillset(&parent_ready);
+	        sigdelset(&parent_ready, SIGUSR1);
+	        sigsuspend(&parent_ready);
+	//Вот до сюда от fork - race condition - за то, чтобы сигнал пришёл в маску пришедших сигналов ребёнка или блок
+	        char buf[BUFSIZE] = {};
+	        char symbol = 0;
+	        int readed = 0;
+	        int bit_write = 0;
 
-        while(1) {
+	        while(1) {
 
-        	readed = read(fd, buf, BUFSIZE);
+	        	readed = read(fd, buf, BUFSIZE);
 
-        	if (readed == -1) {
-        		perror("read ");
-        		exit(1);
-        	}
+	        	if (readed == -1) {
+	        		perror("read ");
+	        		exit(1);
+	        	}
 
-        	for(int buf_pos = 0; buf_pos < readed; buf_pos++) {
+	        	for(int buf_pos = 0; buf_pos < readed; buf_pos++) {
 
-        		symbol = buf[buf_pos];
+	        		symbol = buf[buf_pos];
 
-        		for(int i = 0; i < 8; i++) {
-        			bit_write = symbol % 2;
-        			symbol /= 2;
+	        		for(int i = 0; i < 8; i++) {
+	        			bit_write = symbol % 2;
+	        			symbol /= 2;
+// Вот тут гонка за маску родителя
+	        			if (bit_write == 0) {
+	        				err = kill(ppid, SIGUSR1);
+	        				if (err == -1) {
+	        					perror("kill 1 from child ");
+	        					exit(1);
+	        				}
+	        			}
 
-        			if (bit_write == 0) {
-        				err = kill(ppid, SIGUSR1);
-        				if (err == -1) {
-        					perror("kill 1 from child ");
-        					exit(1);
-        				}
-        			}
+	        			if (bit_write == 1) {
+	        				err = kill(ppid, SIGUSR2);
+	        				if (err == -1) {
+	        					perror("kill 2 from child ");
+	        					exit(1);
+	        				}
+	        			}
 
-        			if (bit_write == 1) {
-        				err = kill(ppid, SIGUSR2);
-        				if (err == -1) {
-        					perror("kill 2 from child ");
-        					exit(1);
-        				}
-        			}
-
-        			sigset_t set_bit;
+	        			sigset_t set_bit;
 					sigfillset(&set_bit);
 					sigdelset(&set_bit, SIGUSR1);
 					//Гонка в том, что один посылает сигнал, а у второго он либо замаскирован, либо он принимает - в цикле
 					sigsuspend(&set_bit); //тут получаем возможность принять SIGUSR1, или взять его, если он пришёл раньше
-        		}
-        	}
+        			}
+	        	}
 
-        	if (readed == 0) break;
-        }
+	        	if (readed == 0) break;
+	        }
 
 	} else { //parent
 
@@ -198,8 +202,8 @@ sigaction//
 				sigdelset(&get_bit, SIGUSR1);
 				sigdelset(&get_bit, SIGUSR2);
 				sigdelset(&get_bit, SIGCHLD);
-// такая же ситуация - борьба за маску
-				sigsuspend (&get_bit);
+// такая же ситуация - борьба за маску ребёнка - от sigsuspend до sigsuspend
+				sigsuspend(&get_bit);
 				
 				symbol = symbol | (bit << i);
 
@@ -223,6 +227,7 @@ void child_dead(int sig) {
 
 void child_one(int sig) {}
 void child_two(int sig) {}
+//Вот здесь 2 обработчика борятся за глобальную переменную
 void parent_one(int sig) {
 	bit = 0;
 	//printf("Come 0\n");

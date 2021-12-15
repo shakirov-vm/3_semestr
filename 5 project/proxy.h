@@ -7,13 +7,14 @@ struct parent {
 	pid_t pid;
 	int pipefd[2]; // Dynamic?
 	char* buf;
-	long bif_size;
-
+	long size;
+	long capacity; // capacity
 };
 
 struct child {
+	int num;
 	pid_t ppid;
 	int pipefd[2];
 	char* buf;
-	long bif_size;
+	long capacity;
 };
