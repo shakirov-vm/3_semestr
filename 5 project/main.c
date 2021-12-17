@@ -20,8 +20,6 @@ int main(int argc, char** argv) {
 
 	struct parent* childs = (struct parent*) calloc (quantity, sizeof(struct parent));
 
-	pid_t true_ppid = getpid();
-
 	int err;
 	fd_set readfds, writefds;
 	int nfds = 0;
@@ -36,141 +34,86 @@ int main(int argc, char** argv) {
     	
 		int tmp_pipefd_from_parent[2] = {0};
 		int tmp_pipefd_to_parent[2] = {0};
-        
-        if (i == 0) {
-
-        	err = pipe(tmp_pipefd_to_parent);
+       
+        err = pipe (tmp_pipefd_to_parent);
+        if (err == -1) {
+            perror("pipe ");
+            exit(1);
+        }
+        if (i != 0) {
+            err = pipe (tmp_pipefd_from_parent);
             if (err == -1) {
-            	perror("pipe ");
-            	exit(1);
-            }
-
-            new_pid = fork ();
-            if (new_pid == -1) {
-            	perror("fork ");
-            	exit(1);
-            }
-        
-            if (new_pid > 0) {
-
-                close(tmp_pipefd_to_parent[1]);
-
-                childs[i].pipefd[0] = tmp_pipefd_to_parent[0];
-                childs[i].capacity = (long) pow(3, quantity - i + 4);
-                childs[i].buf = calloc (1, childs[i].capacity);
-                if (childs[i].buf == NULL) {
-                	perror("childs buf calloc ");
-                	exit(1);
-                }
-
-                FD_SET(tmp_pipefd_to_parent[0], &readfds);
-
-                nfds = tmp_pipefd_to_parent[0] + 1;
-            }
-
-            else {
-
-                close(tmp_pipefd_to_parent[0]);
-
-                i_am->pipefd[1] = tmp_pipefd_to_parent[1];
-                i_am->pipefd[0] = open(argv[2], O_RDONLY);
-
-                if (i_am->pipefd[0] == -1) {
-                	perror("open ");
-                	exit(1);
-                }
-
-                i_am->capacity = (long) pow(3, quantity - i + 4);
-                i_am->buf = calloc (1, childs[i].capacity);
-                if (i_am->buf == NULL) {
-                	perror("i_am buf calloc");
-                	exit(1);
-                } 
-
-                free(childs);
-                childs = NULL;
-
-                break;
+                perror("pipe ");
+                exit(1);
             }
         }
 
-        else {
+        new_pid = fork();
 
-        	err = pipe (tmp_pipefd_to_parent);
-            if (err == -1) {
-            	perror("pipe ");
-            	exit(1);
-            }
-            err = pipe (tmp_pipefd_from_parent);
-            if (err == -1) {
-            	perror("pipe ");
-            	exit(1);
-            }
-    
-            new_pid = fork ();
+        if (new_pid == -1) {
+            perror("fork ");
+            exit(1);
+        }
 
-            if (new_pid == -1) {
-            	perror("fork ");
-            	exit(1);
-            }
+        if (new_pid > 0) { //parent
 
-            if (new_pid > 0) { //parent
-
-                close(tmp_pipefd_to_parent[1]);
+            close(tmp_pipefd_to_parent[1]);
+            if (i != 0) { 
                 close(tmp_pipefd_from_parent[0]);
-
                 childs[i - 1].pipefd[1] = tmp_pipefd_from_parent[1];
-                childs[i].pipefd[0] = tmp_pipefd_to_parent[0];
-                childs[i].capacity = (long) pow(3, quantity - i + 4);
-                childs[i].buf = calloc (1, childs[i].capacity);
-                if (childs[i].buf == NULL) {
-                	perror("childs buf calloc ");
-                	exit(1);
-                }
-
-                FD_SET(tmp_pipefd_to_parent[0], &readfds);
-
-                if (nfds < tmp_pipefd_to_parent[0] + 1) nfds = tmp_pipefd_to_parent[0] + 1;
-                if (nfds < tmp_pipefd_from_parent[1] + 1) nfds = tmp_pipefd_from_parent[1] + 1;
             }
 
-            else { // child
+            childs[i].pipefd[0] = tmp_pipefd_to_parent[0];
+            childs[i].capacity = (long) pow(3, quantity - i + 4);
+            childs[i].buf = calloc (1, childs[i].capacity);
+            if (childs[i].buf == NULL) {
+                perror("childs buf calloc ");
+                exit(1);
+            }
 
-                close(tmp_pipefd_to_parent[0]);
+            FD_SET(tmp_pipefd_to_parent[0], &readfds);
+
+            if (nfds < tmp_pipefd_to_parent[0] + 1) nfds = tmp_pipefd_to_parent[0] + 1;
+            if (i != 0 && (nfds < tmp_pipefd_from_parent[1] + 1)) nfds = tmp_pipefd_from_parent[1] + 1;
+        }
+
+        else { // child
+
+            close(tmp_pipefd_to_parent[0]);
+
+            if (i != 0) {
                 close(tmp_pipefd_from_parent[1]); 
-
-                i_am->num = i;
-                i_am->pipefd[1] = tmp_pipefd_to_parent[1];
                 i_am->pipefd[0] = tmp_pipefd_from_parent[0];
-                i_am->capacity = (long) pow(3, quantity - i + 4);
-                i_am->buf = calloc (1, childs[i].capacity);
-               	if (i_am->buf == NULL) {
-               		perror("i_am buf calloc ");
-               		exit(1);
-               	}
-
-                for(int j = 0; j < i; j++) {
-
-                    close(childs[j].pipefd[0]);
-                    close(childs[j].pipefd[1]);
-                    
-                    free(childs[j].buf);
-                }
-
-                FD_ZERO(&readfds);
-                FD_ZERO(&writefds);
-
-                free(childs);
-                childs = NULL;
-
-                break;
             }
+
+            if (i == 0) i_am->pipefd[0] = open(argv[2], O_RDONLY); 
+
+            i_am->num = i;
+            i_am->pipefd[1] = tmp_pipefd_to_parent[1];
+            i_am->capacity = (long) pow(3, quantity - i + 4);
+            i_am->buf = calloc (1, childs[i].capacity);
+            if (i_am->buf == NULL) {
+                perror("i_am buf calloc ");
+                exit(1);
+            }
+
+            for(int j = 0; j < i; j++) {
+
+                close(childs[j].pipefd[0]);
+                close(childs[j].pipefd[1]);
+                
+                free(childs[j].buf);
+            }
+
+            free(childs);
+
+            break;
         }
     }
 
 	if (new_pid > 0) { // parent
 
-        childs[quantity - 1].pipefd[1] = STDOUT_FILENO; // Вывод на stdout
+        childs[quantity - 1].pipefd[1] = STDOUT_FILENO; 
         FD_SET (STDOUT_FILENO, &writefds);
 
 		for(int i = 0; i < quantity; i++) {
@@ -182,13 +125,11 @@ int main(int argc, char** argv) {
 		fd_set ready_read;
 		fd_set ready_write;
 		int ready_fds;
-		int counter;
 		int readed, writed;
-		int done = 0;
+		int finished = 0;
 
-		while(done != quantity) {
+		while(finished != quantity) {
 
-			counter = 0;
 			ready_read = readfds;
 			ready_write = writefds;
 
@@ -196,28 +137,30 @@ int main(int argc, char** argv) {
 
 			for(int i = 0; i < quantity; i++) {
 
-                if (FD_ISSET (childs[i].pipefd[0], &ready_read)) {
+                if (FD_ISSET(childs[i].pipefd[0], &ready_read)) {
 
-                    childs[i].size = read(childs[i].pipefd[0], childs[i].buf, childs[i].capacity);
-                    if (childs[i].size == -1) {
+                    readed = read(childs[i].pipefd[0], childs[i].buf, childs[i].capacity);
+                    if (readed == -1) {
                     	perror("read ");
                     	exit(1);
                     }
 
-                    if (childs[i].size == 0) {
+                    childs[i].size = readed;
+
+                    if (readed != 0) {
+
+                        FD_CLR(childs[i].pipefd[0], &readfds);
+                        FD_SET(childs[i].pipefd[1], &writefds);
+                    }
+
+                    else {
 
                         FD_CLR(childs[i].pipefd[0], &readfds);
                         close(childs[i].pipefd[0]);
                         close(childs[i].pipefd[1]);
                         free(childs[i].buf);
 
-                        done++;
-                    }
-
-                    else {
-
-                        FD_CLR(childs[i].pipefd[0], &readfds);
-                        FD_SET(childs[i].pipefd[1], &writefds);
+                        finished++;
                     }
                 }
 
@@ -295,3 +238,4 @@ long get_num(int argc, char** argv) {
 
 	return biggest;
 }
+
