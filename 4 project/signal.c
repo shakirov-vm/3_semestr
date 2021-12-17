@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
 	}
 	
 //	sigaction//
-// Отсюда и до строки за сигнал от родителя ребёнку
+// Борьба за маску пришедших сигналов ребёнка [с 55 до 187] - в родителе. В ребёнке - с 55 до 110
 	int pid = fork();
 //Если USR1 придёт в этот момент, то зависнем на sigsuspend
 //	sigprocmask
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 	}
 
 	if (pid == 0) { //child
-// Отсюда до сравнения с getppid идёт борьба за маску - за установку prctl
+// От форка до prctl - борьба с системой у ребёнка (56 - 67)
 		err = prctl(PR_SET_PDEATHSIG, SIGKILL);
 		if (err == -1) {
 			perror("prctl ");
@@ -105,14 +105,14 @@ int main(int argc, char** argv) {
 		}
 
 		sigset_t parent_ready = {};
-	        sigfillset(&parent_ready);
-	        sigdelset(&parent_ready, SIGUSR1);
-	        sigsuspend(&parent_ready);
-	//Вот до сюда от fork - race condition - за то, чтобы сигнал пришёл в маску пришедших сигналов ребёнка или блок
-	        char buf[BUFSIZE] = {};
-	        char symbol = 0;
-	        int readed = 0;
-	        int bit_write = 0;
+        sigfillset(&parent_ready);
+        sigdelset(&parent_ready, SIGUSR1);
+        sigsuspend(&parent_ready);
+//Вот до сюда от fork - race condition - за то, чтобы сигнал пришёл в маску пришедших сигналов ребёнка или блок
+        char buf[BUFSIZE] = {};
+        char symbol = 0;
+        int readed = 0;
+        int bit_write = 0;
 
 	        while(1) {
 
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
 	        		for(int i = 0; i < 8; i++) {
 	        			bit_write = symbol % 2;
 	        			symbol /= 2;
-// Вот тут гонка за маску родителя
+// Гонка за маску пришедших сигналов ребёнка - от килла до сигсаспенда (135 - 154)
 	        			if (bit_write == 0) {
 	        				err = kill(ppid, SIGUSR1);
 	        				if (err == -1) {
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
 	        				}
 	        			}
 
-	        			sigset_t set_bit;
+	        		sigset_t set_bit;
 					sigfillset(&set_bit);
 					sigdelset(&set_bit, SIGUSR1);
 					//Гонка в том, что один посылает сигнал, а у второго он либо замаскирован, либо он принимает - в цикле
@@ -202,7 +202,8 @@ int main(int argc, char** argv) {
 				sigdelset(&get_bit, SIGUSR1);
 				sigdelset(&get_bit, SIGUSR2);
 				sigdelset(&get_bit, SIGCHLD);
-// такая же ситуация - борьба за маску ребёнка - от sigsuspend до sigsuspend
+// В родителе гонка от сигсаспенда до сигсаспенда за маску пришедших сигналов ребёнка (USR1 USR2)
+// И также от сигсаспенда до сигсаспенда за глобальную переменную
 				sigsuspend(&get_bit);
 				
 				symbol = symbol | (bit << i);

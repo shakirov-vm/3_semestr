@@ -9,6 +9,7 @@ struct parent {
 	char* buf;
 	long size;
 	long capacity; // capacity
+	long offset;
 };
 
 struct child {
