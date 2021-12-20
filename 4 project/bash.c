@@ -17,11 +17,11 @@ int main() {
 	sigset_t set_sigf;
 	sigemptyset(&set_sigf);
 
-	struct sigaction segf;
+	/*struct sigaction segf;
 	segf.sa_handler = sigf_handl;
 	segf.sa_mask = set_sigf;
 	segf.sa_flags = SA_NOCLDWAIT;
 	sigaction(SIGSEGV, &segf, NULL);
-
+*/
 	kill(getpid(), SIGSEGV);
 }

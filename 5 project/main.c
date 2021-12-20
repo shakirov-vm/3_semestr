@@ -127,6 +127,7 @@ int main(int argc, char** argv) {
 		int ready_fds;
 		int readed, writed;
 		int finished = 0;
+        int count = 0;
 
 		while(finished != quantity) {
 
@@ -134,6 +135,7 @@ int main(int argc, char** argv) {
 			ready_write = writefds;
 
 			ready_fds = select(nfds, &ready_read, &ready_write, NULL, NULL);
+            count++;
 
 			for(int i = 0; i < quantity; i++) {
 
@@ -192,7 +194,7 @@ int main(int argc, char** argv) {
 		int readed, writed;
 
 		while(1) {
-
+            
 			readed = read(i_am->pipefd[0], i_am->buf, i_am->capacity);
 			if (readed == -1) {
 				perror("read in child ");
@@ -207,7 +209,7 @@ int main(int argc, char** argv) {
 			if (readed == 0) break;
 		}
 
-		printf("Child %d end\n", i_am->num);
+        free(i_am);
 	}
 }
 
