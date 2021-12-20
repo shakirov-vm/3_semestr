@@ -224,7 +224,7 @@ long get_num(int argc, char** argv) {
 	long biggest = strtol(argv[1], &num_end, 0);    //x86
 	
 	if (errno == ERANGE) {
-		printf("Warning: your quantityber bigger then long\n");
+		printf("Warning: your number bigger then long\n");
 		return -2;
 	}
 
@@ -234,7 +234,7 @@ long get_num(int argc, char** argv) {
 	}
 	
 	if (biggest <= 0) {
-		printf("Your quantityber less then zero or not quantityber\n");
+		printf("Your number less then zero or not number\n");
 		return -4;
 	}
 
